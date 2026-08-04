@@ -342,9 +342,12 @@ def _estimated_progress(connection: Any, row: Any) -> tuple[float, bool]:
         return 0.0, False
     average = connection.execute(
         """
-        SELECT AVG(generation_seconds) FROM jobs
-        WHERE status = 'succeeded' AND seconds = ?
-          AND generation_seconds IS NOT NULL AND deleted_at IS NULL
+        SELECT AVG(generation_seconds) FROM (
+            SELECT generation_seconds FROM jobs
+            WHERE status = 'succeeded' AND seconds = ?
+              AND generation_seconds IS NOT NULL AND deleted_at IS NULL
+            ORDER BY completed_at DESC LIMIT 10
+        )
         """,
         (row["seconds"],),
     ).fetchone()[0]
