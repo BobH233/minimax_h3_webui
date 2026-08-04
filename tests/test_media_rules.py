@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+from base64 import b64decode
+from io import BytesIO
+
 from PIL import Image
 
 from config import Settings
-from media import MediaAsset, ensure_thumbnail, image_preview_data_uri, validate_assets
+from media import (
+    LLM_IMAGE_MAX_BYTES,
+    MediaAsset,
+    ensure_thumbnail,
+    image_llm_data_uri,
+    image_preview_data_uri,
+    validate_assets,
+)
 
 
 def item(index: int, kind: str, duration: float | None = None) -> MediaAsset:
@@ -59,3 +69,17 @@ def test_thumbnail_is_fixed_size_and_reused(settings: Settings) -> None:
         assert image.size == (480, 360)
         assert image.format == "JPEG"
     assert ensure_thumbnail(asset, settings) == thumbnail
+
+
+def test_llm_image_preserves_frame_and_stays_under_limit(settings: Settings) -> None:
+    path = settings.uploads_root / "llm.png"
+    Image.effect_noise((2400, 1200), 100).convert("RGB").save(path)
+    asset = MediaAsset("llm", "image", str(path), path.name, path.stat().st_size)
+
+    data_uri = image_llm_data_uri(asset, settings)
+    value = b64decode(data_uri.partition(",")[2])
+
+    assert data_uri.startswith("data:image/jpeg;base64,")
+    assert len(value) < LLM_IMAGE_MAX_BYTES
+    with Image.open(BytesIO(value)) as image:
+        assert image.size == (1280, 640)

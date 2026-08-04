@@ -143,7 +143,7 @@ async function optimizePrompt(): Promise<void> {
   try {
     await streamApi<PromptStreamEvent>(
       "/api/prompt/optimize",
-      { method: "POST", body: JSON.stringify({ prompt: original }) },
+      { method: "POST", body: JSON.stringify({ prompt: original, asset_ids: selected.value.map((asset) => asset.id) }) },
       (event) => {
         if (event.type === "delta") {
           if (!receiving) prompt.value = ""

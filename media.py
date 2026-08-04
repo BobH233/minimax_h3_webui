@@ -35,6 +35,7 @@ MAX_COUNTS = {
 LABELS = {"image": "Picture", "video": "Video", "audio": "Audio"}
 MENTION_LABELS = {"image": "图", "video": "视频", "audio": "音频"}
 THUMBNAIL_SIZE = (480, 360)
+LLM_IMAGE_MAX_BYTES = 500 * 1024
 
 
 class MediaValidationError(ValueError):
@@ -84,6 +85,31 @@ def image_preview_data_uri(asset: MediaAsset, settings: Settings) -> str | None:
     except (UnidentifiedImageError, OSError):
         return None
     return f"data:image/jpeg;base64,{b64encode(output.getvalue()).decode()}"
+
+
+def image_llm_data_uri(asset: MediaAsset, settings: Settings) -> str:
+    if asset.kind != "image":
+        raise MediaValidationError("该素材不是图片")
+    path = ensure_within(Path(asset.path), settings.uploads_root)
+    if path.is_symlink() or not path.is_file():
+        raise MediaValidationError("素材文件不存在或不安全")
+    try:
+        with Image.open(path) as original:
+            base = ImageOps.exif_transpose(original)
+            base.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
+            base = base.convert("RGB")
+            for size in (1280, 1024, 768, 512, 384):
+                image = base.copy()
+                image.thumbnail((size, size), Image.Resampling.LANCZOS)
+                for quality in (78, 65, 52, 40, 30):
+                    output = BytesIO()
+                    image.save(output, format="JPEG", quality=quality, optimize=True)
+                    value = output.getvalue()
+                    if len(value) < LLM_IMAGE_MAX_BYTES:
+                        return f"data:image/jpeg;base64,{b64encode(value).decode()}"
+    except (UnidentifiedImageError, OSError) as exc:
+        raise MediaValidationError("无法压缩参考图片") from exc
+    raise MediaValidationError("参考图片压缩后仍然过大")
 
 
 def file_uri(asset: MediaAsset, settings: Settings) -> str:

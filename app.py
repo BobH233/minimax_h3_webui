@@ -40,6 +40,7 @@ from media import (
     MediaValidationError,
     ensure_thumbnail,
     ensure_within,
+    image_llm_data_uri,
     ingest_upload,
     labels_for_assets,
     media_kind_for_path,
@@ -108,6 +109,7 @@ class LLMConfigBody(BaseModel):
 
 class PromptOptimizeBody(BaseModel):
     prompt: str = Field(min_length=1, max_length=LIMITS.prompt_max_chars)
+    asset_ids: list[str] = Field(default_factory=list, max_length=LIMITS.media_max_count)
 
 
 def _password_hash(password: str, salt: bytes) -> str:
@@ -288,6 +290,26 @@ def _row_asset(row: Any) -> MediaAsset:
         size_bytes=row["size_bytes"],
         duration_seconds=row["duration_seconds"],
     )
+
+
+def _user_assets(asset_ids: list[str], user_id: str) -> list[MediaAsset]:
+    if len(set(asset_ids)) != len(asset_ids):
+        raise HTTPException(status_code=400, detail="素材不能重复选择")
+    if not asset_ids:
+        return []
+    placeholders = ",".join("?" for _ in asset_ids)
+    with database.connect() as connection:
+        rows = connection.execute(
+            f"""
+            SELECT * FROM assets
+            WHERE id IN ({placeholders}) AND user_id = ? AND deleted_at IS NULL
+            """,
+            (*asset_ids, user_id),
+        ).fetchall()
+    by_id = {row["id"]: row for row in rows}
+    if len(by_id) != len(asset_ids):
+        raise HTTPException(status_code=400, detail="存在不可用的素材")
+    return [_row_asset(by_id[asset_id]) for asset_id in asset_ids]
 
 
 def _cached_file(
@@ -569,7 +591,7 @@ def generation_config(_: dict[str, Any] = Depends(current_session)) -> dict[str,
 
 @app.post("/api/prompt/optimize")
 async def optimize_prompt(
-    body: PromptOptimizeBody, _: dict[str, Any] = Depends(csrf_session)
+    body: PromptOptimizeBody, session: dict[str, Any] = Depends(csrf_session)
 ) -> StreamingResponse:
     config = _saved_llm_config()
     if config is None:
@@ -581,13 +603,23 @@ async def optimize_prompt(
     except (OSError, ValueError) as exc:
         LOGGER.error("无法读取提示词优化模板: %s", exc)
         raise HTTPException(status_code=500, detail="提示词优化模板不可用") from exc
+    selected = _user_assets(body.asset_ids, session["id"])
+    images: list[tuple[str, str]] = []
+    try:
+        for asset in selected:
+            if asset.kind == "image":
+                images.append(
+                    (f"@图{len(images) + 1}", image_llm_data_uri(asset, settings))
+                )
+    except MediaValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     async def events():
         result: list[str] = []
         total_length = 0
         yield _sse({"type": "start"})
         try:
-            async for delta in stream_completion(config, content):
+            async for delta in stream_completion(config, content, images):
                 result.append(delta)
                 total_length += len(delta)
                 if total_length > LIMITS.prompt_max_chars:
@@ -729,31 +761,7 @@ def asset_thumbnail(
 def create_job(
     body: JobCreate, session: dict[str, Any] = Depends(csrf_session)
 ) -> dict[str, Any]:
-    if len(set(body.asset_ids)) != len(body.asset_ids):
-        raise HTTPException(status_code=400, detail="素材不能重复选择")
-    placeholders = ",".join("?" for _ in body.asset_ids)
-    with database.connect() as connection:
-        rows = connection.execute(
-            f"""
-            SELECT * FROM assets
-            WHERE id IN ({placeholders}) AND user_id = ? AND deleted_at IS NULL
-            """,
-            (*body.asset_ids, session["id"]),
-        ).fetchall()
-    by_id = {row["id"]: row for row in rows}
-    if len(by_id) != len(body.asset_ids):
-        raise HTTPException(status_code=400, detail="存在不可用的素材")
-    assets = [
-        MediaAsset(
-            id=row["id"],
-            kind=row["kind"],
-            path=row["path"],
-            original_name=row["original_name"],
-            size_bytes=row["size_bytes"],
-            duration_seconds=row["duration_seconds"],
-        )
-        for row in (by_id[asset_id] for asset_id in body.asset_ids)
-    ]
+    assets = _user_assets(body.asset_ids, session["id"])
     try:
         payload = build_payload(
             settings,

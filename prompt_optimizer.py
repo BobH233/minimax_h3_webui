@@ -13,6 +13,7 @@ OUTPUT_START = "@new_prompt_start"
 OUTPUT_END = "@new_prompt_end"
 SYSTEM_PROMPT = (
     "严格遵循用户给出的 MiniMax H3 提示词规范。保留所有 @素材引用。"
+    "如果用户消息附带参考图片，必须按每张图片前标注的 @图N 对应关系观察和理解图片，不得交换或重编号。"
     "在完整实现用户意图、保留必要主体定义和镜头细节的前提下尽可能精简，删除重复、空泛和无助于生成的描述，最终提示词正文不超过 4000 个字符。"
     "所有人物、动物、道具、玩具和物体都只能使用从 1 开始连续编号的 <Subject x> 标签；"
     "禁止使用 <Object x>、<Animal x>、<Prop x>、<Item x> 或任何其他实体标签。"
@@ -134,12 +135,41 @@ class PromptMarkerParser:
         return value
 
 
-def _payload(config: LLMConfig, content: str, *, stream: bool) -> dict:
+def _user_content(content: str, images: list[tuple[str, str]]) -> str | list[dict]:
+    if not images:
+        return content
+    parts: list[dict] = [
+        {
+            "type": "text",
+            "text": (
+                f"{content}\n\n"
+                "下面附带当前选中的参考图片。每张图片前的文字标明它对应的 @图N；"
+                "请先观察图片中的主体身份、外观、服装、道具与场景，再结合用户需求优化提示词，严格保持对应关系。"
+            ),
+        }
+    ]
+    for index, (mention, data_uri) in enumerate(images, 1):
+        parts.extend(
+            [
+                {"type": "text", "text": f"参考图片 {index}，对应 {mention}。"},
+                {"type": "image_url", "image_url": {"url": data_uri, "detail": "low"}},
+            ]
+        )
+    return parts
+
+
+def _payload(
+    config: LLMConfig,
+    content: str,
+    *,
+    stream: bool,
+    images: list[tuple[str, str]] | None = None,
+) -> dict:
     return {
         "model": config.model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": content},
+            {"role": "user", "content": _user_content(content, images or [])},
         ],
         "stream": stream,
     }
@@ -181,7 +211,9 @@ async def test_connection(config: LLMConfig) -> str:
         raise RuntimeError("模型返回格式不是 OpenAI Chat Completions") from exc
 
 
-async def stream_completion(config: LLMConfig, content: str) -> AsyncIterator[str]:
+async def stream_completion(
+    config: LLMConfig, content: str, images: list[tuple[str, str]] | None = None
+) -> AsyncIterator[str]:
     parser = PromptMarkerParser()
     timeout = httpx.Timeout(180, connect=10)
     async with httpx.AsyncClient(
@@ -190,7 +222,7 @@ async def stream_completion(config: LLMConfig, content: str) -> AsyncIterator[st
         "POST",
         config.endpoint,
         headers=config.headers,
-        json=_payload(config, content, stream=True),
+        json=_payload(config, content, stream=True, images=images),
     ) as response:
         if response.is_error:
             await response.aread()

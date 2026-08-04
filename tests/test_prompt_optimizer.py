@@ -6,6 +6,7 @@ from prompt_optimizer import (
     PROMPT_MARKER,
     LLMConfig,
     PromptMarkerParser,
+    _payload,
     extract_delta_text,
     render_template,
     validated_config,
@@ -25,6 +26,15 @@ def test_prompt_optimizer_helpers(tmp_path: Path) -> None:
     template.write_text(f"before\n{PROMPT_MARKER}\nafter", encoding="utf-8")
     assert render_template(template, "  @图1 跑起来  ") == "before\n@图1 跑起来\nafter"
     assert extract_delta_text({"choices": [{"delta": {"content": "hello"}}]}) == "hello"
+    payload = _payload(
+        config,
+        "prompt",
+        stream=True,
+        images=[("@图1", "data:image/jpeg;base64,abc")],
+    )
+    user_content = payload["messages"][1]["content"]
+    assert user_content[1]["text"] == "参考图片 1，对应 @图1。"
+    assert user_content[2]["image_url"]["url"] == "data:image/jpeg;base64,abc"
 
     parser = PromptMarkerParser()
     chunks = ["ignored\n@new_", "prompt_start\n@图1 跑", "起来\n@new_prompt_", "end\nignored"]
