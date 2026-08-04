@@ -84,14 +84,16 @@ function moveAsset(index: number, direction: -1 | 1): void {
   rewriteReferences(before, next)
 }
 
-async function upload(event: Event): Promise<void> {
-  if (optimizing.value) return
-  const input = event.target as HTMLInputElement
-  if (!input.files?.length) return
+function mediaFiles(files: FileList | File[]): File[] {
+  return Array.from(files).filter((file) => /^(image|video|audio)\//u.test(file.type) || /\.(jpe?g|png|webp|mp4|mov|webm|mp3|wav|m4a|flac|ogg)$/iu.test(file.name))
+}
+
+async function uploadFiles(files: File[]): Promise<void> {
+  if (!files.length || optimizing.value || uploading.value) return
   error.value = ""
   uploading.value = true
   const body = new FormData()
-  for (const file of input.files) body.append("files", file)
+  for (const file of files) body.append("files", file)
   try {
     const created = await api<Asset[]>("/api/assets", { method: "POST", body })
     assets.value = [...created, ...assets.value]
@@ -102,8 +104,26 @@ async function upload(event: Event): Promise<void> {
     error.value = caught instanceof Error ? caught.message : "上传失败"
   } finally {
     uploading.value = false
-    input.value = ""
   }
+}
+
+function upload(event: Event): void {
+  const input = event.target as HTMLInputElement
+  if (input.files) void uploadFiles(mediaFiles(input.files))
+  input.value = ""
+}
+
+function pasteFiles(event: ClipboardEvent): void {
+  if (!event.clipboardData) return
+  const files = mediaFiles(event.clipboardData.files)
+  if (!files.length) return
+  event.preventDefault()
+  void uploadFiles(files)
+}
+
+function dropFiles(event: DragEvent): void {
+  if (!event.dataTransfer) return
+  void uploadFiles(mediaFiles(event.dataTransfer.files))
 }
 
 function randomSeed(): void {
@@ -189,13 +209,13 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page create-page">
+  <div class="page create-page" @paste="pasteFiles" @dragover.prevent @drop.prevent="dropFiles">
     <header class="page-header">
       <div><h1>新建视频</h1><p>组合参考素材并提交到生成队列。</p></div>
-      <button class="secondary-button" type="button" :disabled="optimizing" @click="fileInput?.click()">
+      <button class="secondary-button" type="button" :disabled="optimizing || uploading" @click="fileInput?.click()">
         <IconUpload :size="18" />{{ uploading ? "正在上传" : "上传素材" }}
       </button>
-      <input ref="fileInput" class="visually-hidden" type="file" multiple accept="image/*,video/*,audio/*" :disabled="optimizing" @change="upload" />
+      <input ref="fileInput" class="visually-hidden" type="file" multiple accept="image/*,video/*,audio/*" :disabled="optimizing || uploading" @change="upload" />
     </header>
 
     <form class="create-layout" @submit.prevent="submit">
