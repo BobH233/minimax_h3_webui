@@ -96,7 +96,7 @@ class Settings:
         if not api_base.startswith(("http://127.0.0.1", "http://localhost")):
             raise ValueError("H3_API_BASE 必须指向本机 127.0.0.1 或 localhost")
 
-        gpu_raw = os.getenv("H3_PHYSICAL_GPU_IDS", "0,1,2,3,4,5,6,7")
+        gpu_raw = os.getenv("H3_PHYSICAL_GPU_IDS", "0,1,2,3")
         try:
             gpu_ids = tuple(int(item.strip()) for item in gpu_raw.split(",") if item.strip())
         except ValueError as exc:

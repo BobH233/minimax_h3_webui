@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$PROJECT_ROOT"
+
+if [[ -f .env ]]; then
+  set -a
+  source .env
+  set +a
+fi
+
 : "${H3_MODEL_PATH:=/data/MiniMax-H3/Ref2VA}"
 : "${H3_SGLANG_IMAGE:=/data/images/sglang-dev.sif}"
 : "${H3_CUDA_COMPAT:=/data/cuda-compat/13.0/root/usr/local/cuda-13.0/compat}"
-: "${H3_GPU_IDS:=0,1,2,3,4,5,6,7}"
+: "${H3_GPU_IDS:=0,1,2,3}"
 : "${H3_API_HOST:=127.0.0.1}"
 : "${H3_API_PORT:=30011}"
 : "${H3_HF_HOME:=/data/huggingface_home}"
@@ -43,9 +52,9 @@ exec apptainer exec \
   "$H3_SGLANG_IMAGE" \
   sglang serve \
   --model-path "$H3_MODEL_PATH" \
-  --num-gpus 8 \
+  --num-gpus 4 \
   --tp-size 2 \
-  --ulysses-degree 4 \
+  --ulysses-degree 2 \
   --performance-mode speed \
   --host "$H3_API_HOST" \
   --port "$H3_API_PORT"

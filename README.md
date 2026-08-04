@@ -89,7 +89,7 @@ bash scripts/start_webui.sh
 | `H3_WEB_HOST` | WebUI 监听地址 | `127.0.0.1` |
 | `H3_WEB_PORT` | WebUI 端口 | `7861` |
 | `H3_DATA_ROOT` | SQLite、素材、缩略图和输出目录 | `/data/minimax-h3-webui-data` |
-| `H3_PHYSICAL_GPU_IDS` | 管理后台显示的 GPU | `0,1,2,3,4,5,6,7` |
+| `H3_PHYSICAL_GPU_IDS` | 管理后台显示的 GPU | `0,1,2,3` |
 | `H3_OUTBOUND_PROXY` | WebUI 外部 LLM 请求使用的 HTTP 代理 | `http://127.0.0.1:8897` |
 | `H3_SECURE_COOKIE` | HTTPS 部署时启用 Secure Cookie | `0` |
 
@@ -97,7 +97,7 @@ bash scripts/start_webui.sh
 
 ## 启动 SGLang
 
-`scripts/start_sglang.sh` 使用 Apptainer、8 张 GPU 和 CUDA compatibility libraries 启动 Ref2VA。请先在 `.env` 中配置：
+`scripts/start_sglang.sh` 使用 Apptainer、4 张 GPU 和 CUDA compatibility libraries，以 TP2 + Ulysses2 启动 Ref2VA。请先在 `.env` 中配置：
 
 - `H3_MODEL_PATH`
 - `H3_SGLANG_IMAGE`

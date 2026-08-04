@@ -12,7 +12,7 @@ fi
 
 : "${H3_MODEL_ROOT:=/data/MiniMax-H3/Ref2VA}"
 : "${H3_DATA_ROOT:=/data/minimax-h3-webui-data}"
-: "${H3_PHYSICAL_GPU_IDS:=0,1,2,3,4,5,6,7}"
+: "${H3_PHYSICAL_GPU_IDS:=0,1,2,3}"
 : "${H3_WEB_PORT:=7861}"
 : "${H3_API_PORT:=30011}"
 : "${H3_CONDA_ENV:=minimax-h3-webui}"
