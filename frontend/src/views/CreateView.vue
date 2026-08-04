@@ -200,8 +200,8 @@ onMounted(async () => {
 
     <form class="create-layout" @submit.prevent="submit">
       <section class="composer-column">
-        <div class="section-heading"><h2>提示词</h2><span>{{ prompt.length }} / 4000</span></div>
-        <MentionComposer v-model="prompt" :assets="selectedWithMentions" :disabled="optimizing" />
+        <div class="section-heading"><h2>提示词</h2><span>{{ prompt.length }} / {{ config?.limits.prompt_max_chars || 8000 }}</span></div>
+        <MentionComposer v-model="prompt" :assets="selectedWithMentions" :disabled="optimizing" :max-length="config?.limits.prompt_max_chars || 8000" />
         <div class="prompt-actions">
           <p v-if="optimizeError" class="form-error">{{ optimizeError }}</p>
           <button class="secondary-button optimize-prompt-button" type="button" :disabled="optimizing || submitting || !prompt.trim()" @click="optimizePrompt">

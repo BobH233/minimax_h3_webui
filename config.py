@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 @dataclass(frozen=True)
 class GenerationLimits:
-    prompt_max_chars: int = 4000
+    prompt_max_chars: int = 8000
     seconds_min: int = 4
     seconds_max: int = 15
     seed_min: int = 0

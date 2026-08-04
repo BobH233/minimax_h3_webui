@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from "vue"
 import { IconFileMusic, IconMovie } from "@tabler/icons-vue"
 import type { Asset } from "../api"
 
-const props = withDefaults(defineProps<{ modelValue: string; assets: Asset[]; disabled?: boolean }>(), { disabled: false })
+const props = withDefaults(defineProps<{ modelValue: string; assets: Asset[]; disabled?: boolean; maxLength?: number }>(), { disabled: false, maxLength: 8000 })
 const emit = defineEmits<{ "update:modelValue": [value: string] }>()
 const composer = ref<HTMLElement | null>(null)
 const textarea = ref<HTMLTextAreaElement | null>(null)
@@ -176,7 +176,7 @@ onMounted(() => void resize())
         ref="textarea"
         :value="modelValue"
         rows="1"
-        maxlength="4000"
+        :maxlength="maxLength"
         :disabled="disabled"
         placeholder="描述视频内容，输入 @ 引用素材"
         @input="onInput"

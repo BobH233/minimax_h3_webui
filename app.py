@@ -588,7 +588,9 @@ async def optimize_prompt(
                 result.append(delta)
                 total_length += len(delta)
                 if total_length > LIMITS.prompt_max_chars:
-                    raise RuntimeError("优化后的提示词超过 4000 个字符")
+                    raise RuntimeError(
+                        f"优化后的提示词超过 {LIMITS.prompt_max_chars} 个字符"
+                    )
                 yield _sse({"type": "delta", "text": delta})
             final = "".join(result).strip()
             if not final:
