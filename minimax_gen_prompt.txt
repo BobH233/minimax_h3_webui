@@ -1,0 +1,181 @@
+以下是视频生成模型MiniMaxH3偏爱的提示词模板的形式：
+
+
+官方推荐的核心是：把“素材文件”和“视频中的人物”分开描述。
+
+- `@图1` 最终是 `<Picture 1>`：表示参考图片文件。
+- `<Subject 1>`：表示从图片中抽象出来、需要在视频里保持一致的人物。
+- `@音频1` 最终是 `<Audio 1>`：表示声线参考音频。
+- `(S1)`：表示视频中的第一位说话人。
+- `<d>[Chinese] ...</d>`：表示实际需要说出的中文台词。
+
+## 统一主体标签规则
+
+所有需要在视频中持续引用或保持一致的实体，无论是人物、动物、道具、玩具还是其他物体，都必须统一使用连续编号的 `<Subject x>` 标签。
+
+- 只允许使用 `<Subject 1>`、`<Subject 2>`、`<Subject 3>` 等主体标签。
+- 禁止使用 `<Object x>`、`<Animal x>`、`<Prop x>`、`<Item x>` 或其他自创实体标签。
+- 主体编号必须从 1 开始连续递增，不得跳号。
+- 每个不同主体使用独立的 `<Subject x>`；同一主体的多张参考图应合并到同一个 `<Subject x>` 定义中。
+
+例如，@图1 是人物，@图2 是毛绒玩具时，必须写成：
+
+```text
+<Subject 1> is the person in @图1, preserving the same facial identity, facial features, hairstyle, apparent age, and overall visual appearance.
+<Subject 2> is the plush toy in @图2, preserving its design, material, color, size, and recognizable visual features.
+```
+
+不得把第二个主体写成 `<Object 1>`。
+
+因此，不建议只写：
+
+```text
+@图1 用 @音频1 说“你好”
+```
+
+更推荐明确写出人物、声线和台词之间的关系。
+
+## 可以直接粘贴的推荐模板
+
+假设：
+
+- `@图1`：人物参考图
+- `@音频1`：这个人物的声线参考
+- 需要他说：“今天晚上，我们一起去看海吧。”
+
+在当前 WebUI 里可以这样写：
+
+```text
+subject_definitions:
+<Subject 1> is the person in @图1, preserving the same facial identity, facial features, hairstyle, apparent age, and overall appearance.
+@音频1 is the voice-timbre reference for <Subject 1> (S1), containing a spoken Chinese voice.
+
+summary:
+[reference generation + audio reference] The target video shows <Subject 1> speaking naturally. The visual identity of <Subject 1> comes from @图1, while @音频1 provides the voice timbre and delivery style for the spoken dialogue.
+
+retention_analysis:
+<Subject 1> (appears in [Shot 1]): fully_preserved - the person's identity, facial structure, hairstyle, apparent age, and recognizable appearance from @图1 are retained.
+@音频1: reference - the target speaker follows the voice timbre, vocal texture, and natural delivery of @音频1 without copying its original spoken content.
+
+detailed_description:
+The target video uses a realistic cinematic style with natural facial detail, stable character identity, and accurate lip synchronization.
+[Shot 1] A medium close-up shows <Subject 1> facing the camera. <Subject 1> retains the same facial identity, hairstyle, facial proportions, and recognizable appearance from @图1. The character breathes naturally, blinks occasionally, and makes subtle head movements. <Subject 1> (S1) speaks using the voice timbre referenced from @音频1, with natural Chinese pronunciation and calm conversational delivery, <d>[Chinese] 今天晚上，我们一起去看海吧。</d> The mouth movements synchronize naturally with every syllable. After finishing the sentence, <Subject 1> closes the lips naturally and gives a gentle smile.
+
+overall_soundscape:
+A quiet indoor ambience remains underneath the dialogue. The spoken voice is clear and positioned in the foreground.
+
+non_diegetic_music:
+N/A
+```
+
+WebUI 提交时会自动变成：
+
+```text
+<Subject 1> is the person in <Picture 1>...
+<Audio 1> is the voice-timbre reference for <Subject 1> (S1)...
+```
+
+## 为什么要定义 `<Subject 1>`
+
+官方对两个概念有明确区分：
+
+- `<Picture 1>` 是图片素材本身。
+- `<Subject 1>` 是从图片中提取并在生成视频中复用的人物。
+
+如果图片只用于提供人物身份，官方建议这样写：
+
+```text
+<Subject 1> is the woman in @图1, with long dark hair, a blue cardigan, and a thin silver necklace.
+```
+
+后续动作都引用：
+
+```text
+<Subject 1>
+```
+
+而不是反复把人物称为：
+
+```text
+@图1
+```
+
+只有当图片本身是首帧、尾帧、关键帧或构图参考时，才建议直接定义图片：
+
+```text
+@图1 is the first frame of [Shot 1], defining the camera composition, subject position, lighting, and background layout.
+```
+
+## 多张图片引用同一个人物
+
+如果同一个人物有多张参考图，官方推荐把它们合并成同一个 Subject：
+
+```text
+subject_definitions:
+<Subject 1> is the same woman whose facial identity and front view come from @图1, whose side profile comes from @图2, and whose full-body clothing and proportions come from @图3.
+```
+
+随后：
+
+```text
+retention_analysis:
+<Subject 1> (appears in [Shot 1]): fully_preserved - the woman's facial identity, side profile, hairstyle, clothing, and body proportions from @图1, @图2, and @图3 are retained.
+```
+
+## 声线引用的关键写法
+
+只参考音色，不复制参考音频原文：
+
+```text
+@音频1: reference - the target speaker follows @音频1's voice timbre and delivery without copying the original spoken content.
+```
+
+人物说新台词：
+
+```text
+<Subject 1> (S1) speaks using the voice timbre referenced from @音频1, <d>[Chinese] 这是需要生成的新台词。</d>
+```
+
+最关键的三点：
+
+1. 用 `voice-timbre reference` 明确表示只参考声线。
+2. 用 `<Subject 1> (S1)` 把声音绑定到对应人物。
+3. 新台词必须放在 `<d>[Chinese] ...</d>` 里面。
+
+如果参考音频里的原话不希望出现在视频中，最好明确写：
+
+```text
+without copying the original spoken content
+```
+
+## 参考音频要求
+
+官方 Ref2VA 规格：
+
+- 音频每段必须是 2–15 秒。
+- 最多 3 段音频。
+- 所有参考音频总时长不超过 15 秒。
+- 音频不能单独作为唯一素材，必须同时提供图片或视频。
+
+实际使用时，声线素材最好是单人、无音乐、无混响、环境噪声较少的清晰说话录音。
+
+另外，官方明确推荐这六段结构：
+
+```text
+subject_definitions
+summary
+retention_analysis
+detailed_description
+overall_soundscape
+non_diegetic_music
+```
+
+结构描述推荐使用英文，中文台词保留在 `<d>[Chinese] ...</d>` 中。官方说明见 [MiniMax-H3 模型页](https://modelscope.cn/models/MiniMax/MiniMax-H3) 和 [Ref2VA Prompting Guide](https://modelscope.cn/models/MiniMax/MiniMax-H3/resolve/master/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md)。
+
+接下来，我们的系统中，对于素材的引用你直接用 @图1 这样即可，音频就是 @音频1 这样即可。然后其他的按照上面的内容来。
+
+以下是我想要实现的视频内容，其中引用已经用 @图1 @音频1 这样的形式给标记出来了：
+
+################ PUT YOUR PROMPT HERE ################
+
+请你生成minimaxh3的完整提示词。所有人物、动物、道具、玩具和物体都必须统一使用连续编号的 `<Subject x>`，禁止输出任何 `<Object x>` 或其他类型的实体标签。

@@ -1,0 +1,16 @@
+.env
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+data/
+logs/
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/vite.config.d.ts
+patches/
+h3-*.png
+h3-*.mp3
+h3-*.mp4
