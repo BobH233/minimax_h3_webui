@@ -54,6 +54,18 @@ export interface Job {
   user?: Pick<User, "id" | "username" | "weight">
 }
 
+export interface PaginatedResponse<T> {
+  items: T[]
+  page: number
+  page_size: number
+  total: number
+  total_pages: number
+}
+
+export interface AdminQueueResponse extends PaginatedResponse<Job> {
+  status_counts: Record<string, number>
+}
+
 export interface PublicShare {
   id: string
   prompt: string

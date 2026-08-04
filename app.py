@@ -17,7 +17,16 @@ from typing import Annotated, Any
 
 import httpx
 import uvicorn
-from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -36,6 +45,7 @@ from media import (
     media_kind_for_path,
     mentions_for_assets,
 )
+from pagination import PAGE_SIZE, page_window
 from prompt_optimizer import (
     LLMConfig,
     render_template,
@@ -800,16 +810,42 @@ def create_job(
 
 
 @app.get("/api/jobs")
-def list_jobs(session: dict[str, Any] = Depends(current_session)) -> list[dict[str, Any]]:
+def list_jobs(
+    session: dict[str, Any] = Depends(current_session),
+    page: int = Query(default=1, ge=1),
+    status: str = Query(default="all"),
+) -> dict[str, Any]:
+    status_clauses = {
+        "all": "",
+        "queued": " AND status = 'queued'",
+        "generating": " AND status IN ('submitting', 'generating')",
+        "succeeded": " AND status = 'succeeded'",
+        "failed": " AND status = 'failed'",
+    }
+    if status not in status_clauses:
+        raise HTTPException(status_code=400, detail="任务状态筛选无效")
+    where = "user_id = ? AND deleted_at IS NULL" + status_clauses[status]
     with database.connect() as connection:
+        total = int(
+            connection.execute(
+                f"SELECT COUNT(*) FROM jobs WHERE {where}", (session["id"],)
+            ).fetchone()[0]
+        )
+        current_page, total_pages, offset = page_window(total, page)
         rows = connection.execute(
-            """
-            SELECT * FROM jobs WHERE user_id = ? AND deleted_at IS NULL
-            ORDER BY created_at DESC LIMIT 200
+            f"""
+            SELECT * FROM jobs WHERE {where}
+            ORDER BY created_at DESC LIMIT ? OFFSET ?
             """,
-            (session["id"],),
+            (session["id"], PAGE_SIZE, offset),
         ).fetchall()
-        return [_job_payload(connection, row) for row in rows]
+        return {
+            "items": [_job_payload(connection, row) for row in rows],
+            "page": current_page,
+            "page_size": PAGE_SIZE,
+            "total": total,
+            "total_pages": total_pages,
+        }
 
 
 @app.get("/api/jobs/{job_id}")
@@ -1103,8 +1139,17 @@ def admin_delete_user(
 
 
 @app.get("/api/admin/queue")
-def admin_queue(_: dict[str, Any] = Depends(admin_session)) -> list[dict[str, Any]]:
+def admin_queue(
+    _: dict[str, Any] = Depends(admin_session),
+    page: int = Query(default=1, ge=1),
+) -> dict[str, Any]:
     with database.connect() as connection:
+        total = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM jobs WHERE deleted_at IS NULL"
+            ).fetchone()[0]
+        )
+        current_page, total_pages, offset = page_window(total, page)
         rows = connection.execute(
             """
             SELECT jobs.*, users.username, users.weight
@@ -1118,10 +1163,27 @@ def admin_queue(_: dict[str, Any] = Depends(admin_session)) -> list[dict[str, An
                 CASE WHEN jobs.status = 'queued' THEN users.weight END DESC,
                 CASE WHEN jobs.status = 'queued' THEN jobs.created_at END ASC,
                 jobs.created_at DESC
-            LIMIT 300
-            """
+            LIMIT ? OFFSET ?
+            """,
+            (PAGE_SIZE, offset),
         ).fetchall()
-        return [_job_payload(connection, row, True) for row in rows]
+        status_counts = {
+            row["status"]: row["count"]
+            for row in connection.execute(
+                """
+                SELECT status, COUNT(*) AS count FROM jobs
+                WHERE deleted_at IS NULL GROUP BY status
+                """
+            ).fetchall()
+        }
+        return {
+            "items": [_job_payload(connection, row, True) for row in rows],
+            "page": current_page,
+            "page_size": PAGE_SIZE,
+            "total": total,
+            "total_pages": total_pages,
+            "status_counts": status_counts,
+        }
 
 
 @app.delete("/api/admin/jobs/{job_id}")
