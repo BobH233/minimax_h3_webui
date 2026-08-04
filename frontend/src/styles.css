@@ -189,6 +189,12 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .selected-check { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 23px; height: 23px; border-radius: 50%; background: var(--accent); color: #fff; }
 .asset-thumb { position: relative; display: grid; width: 100%; aspect-ratio: 4 / 3; place-items: center; overflow: hidden; border-radius: var(--radius-small); background: var(--surface-2); color: var(--muted); }
 .asset-thumb img, .asset-thumb video { width: 100%; height: 100%; object-fit: cover; }
+.image-preview-trigger { cursor: zoom-in; }
+.image-preview-dialog { width: fit-content; max-width: 96vw; padding: 0; border: 0; overflow: visible; background: transparent; }
+.image-preview-dialog::backdrop { background: rgb(9 12 18 / 88%); backdrop-filter: blur(8px); }
+.image-preview-full { display: block; max-width: 96vw; max-height: 92vh; border-radius: var(--radius); object-fit: contain; box-shadow: 0 24px 80px rgb(0 0 0 / 45%); }
+.image-preview-close { position: fixed; top: 18px; right: 18px; display: grid; width: 42px; height: 42px; padding: 0; place-items: center; border: 1px solid rgb(255 255 255 / 20%); border-radius: 50%; background: rgb(20 23 30 / 72%); color: #fff; cursor: pointer; }
+.image-preview-close:hover { background: rgb(35 39 49 / 92%); }
 .asset-thumb.compact { width: 48px; height: 48px; aspect-ratio: 1; }
 .asset-kind-icon { position: absolute; right: 6px; bottom: 6px; padding: 3px; border-radius: 5px; background: color-mix(in srgb, var(--surface) 80%, transparent); color: var(--text); }
 .settings-column { position: sticky; top: 28px; }

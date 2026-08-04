@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue"
 import { useRoute } from "vue-router"
 import { IconFileMusic, IconMovie } from "@tabler/icons-vue"
 import { api, formatDate, formatDuration, type PublicShare } from "../api"
+import ImagePreview from "../components/ImagePreview.vue"
 import PromptText from "../components/PromptText.vue"
 
 const route = useRoute()
@@ -54,7 +55,7 @@ onMounted(async () => {
         <h2>参考素材</h2>
         <div class="public-assets">
           <article v-for="asset in share.assets" :key="asset.id" class="public-asset-card">
-            <img v-if="asset.kind === 'image'" :src="asset.content_url" :alt="asset.original_name" loading="lazy" @contextmenu.prevent />
+            <ImagePreview v-if="asset.kind === 'image'" :src="asset.content_url" :thumbnail-src="asset.thumbnail_url" :alt="asset.original_name" no-download />
             <video v-else-if="asset.kind === 'video'" :src="asset.content_url" controls controlslist="nodownload noremoteplayback" disablepictureinpicture preload="metadata" @contextmenu.prevent />
             <div v-else class="public-audio">
               <IconFileMusic :size="28" />
