@@ -276,6 +276,8 @@ summary { padding: 13px 0; color: var(--muted); font-size: 12px; font-weight: 65
 .detail-block { padding-top: 18px; border-top: 1px solid var(--line); }
 .detail-block > h2 { margin-bottom: 15px; }
 .prompt-block .prompt-rich-text { display: block; font-size: 15px; line-height: 1.75; }
+.original-prompt { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); }
+.original-prompt h2 { margin-bottom: 15px; font-size: 15px; }
 .metrics-block dl { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 0; }
 .metrics-block dl div, .gpu-card dl div { display: grid; gap: 4px; }
 dt { color: var(--muted); font-size: 11px; }

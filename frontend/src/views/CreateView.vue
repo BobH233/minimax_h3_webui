@@ -21,6 +21,7 @@ const assets = ref<Asset[]>([])
 const selected = ref<Asset[]>([])
 const config = ref<GenerationConfig | null>(null)
 const prompt = ref("")
+const originalPrompt = ref<string | null>(null)
 const seconds = ref(5)
 const aspectRatio = ref("16:9")
 const seed = ref(0)
@@ -167,6 +168,7 @@ async function optimizePrompt(): Promise<void> {
       },
     )
     if (!completed) throw new Error("提示词优化响应未完成")
+    if (originalPrompt.value === null) originalPrompt.value = original.trim()
   } catch (caught) {
     prompt.value = original
     optimizeError.value = caught instanceof Error ? caught.message : "提示词优化失败"
@@ -183,6 +185,7 @@ async function submit(): Promise<void> {
       method: "POST",
       body: JSON.stringify({
         prompt: prompt.value,
+        original_prompt: originalPrompt.value,
         asset_ids: selected.value.map((asset) => asset.id),
         seconds: seconds.value,
         aspect_ratio: aspectRatio.value,

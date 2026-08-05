@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id),
     prompt TEXT NOT NULL,
+    original_prompt TEXT,
     compiled_prompt TEXT NOT NULL,
     payload_json TEXT NOT NULL,
     status TEXT NOT NULL CHECK(status IN (
@@ -116,13 +117,18 @@ class Database:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.execute("PRAGMA synchronous = NORMAL")
             connection.executescript(SCHEMA)
-            columns = {
+            asset_columns = {
                 row[1] for row in connection.execute("PRAGMA table_info(assets)")
             }
-            if "original_path" not in columns:
+            if "original_path" not in asset_columns:
                 connection.execute("ALTER TABLE assets ADD COLUMN original_path TEXT")
-            if "original_size_bytes" not in columns:
+            if "original_size_bytes" not in asset_columns:
                 connection.execute(
                     "ALTER TABLE assets ADD COLUMN original_size_bytes INTEGER"
                 )
+            job_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(jobs)")
+            }
+            if "original_prompt" not in job_columns:
+                connection.execute("ALTER TABLE jobs ADD COLUMN original_prompt TEXT")
         self.path.chmod(0o600)

@@ -33,6 +33,7 @@ export interface Asset {
 export interface Job {
   id: string
   prompt: string
+  original_prompt: string | null
   status: JobStatus
   stage: string
   error: string | null

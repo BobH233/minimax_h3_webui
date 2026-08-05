@@ -24,13 +24,48 @@ def test_existing_assets_table_gets_compression_columns(settings: Settings) -> N
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE jobs (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                prompt TEXT NOT NULL,
+                compiled_prompt TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                status TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                remote_id TEXT,
+                output_path TEXT,
+                error TEXT,
+                progress REAL,
+                seconds INTEGER NOT NULL,
+                aspect_ratio TEXT NOT NULL,
+                seed INTEGER NOT NULL,
+                num_inference_steps INTEGER NOT NULL,
+                flow_shift REAL NOT NULL,
+                audio_flow_shift REAL NOT NULL,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                started_at REAL,
+                completed_at REAL,
+                generation_seconds REAL,
+                deleted_at REAL
+            )
+            """
+        )
 
     database = Database(settings.database_path)
     database.initialize()
 
     with database.connect() as connection:
-        columns = {row[1] for row in connection.execute("PRAGMA table_info(assets)")}
-    assert {"original_path", "original_size_bytes"} <= columns
+        asset_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(assets)")
+        }
+        job_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(jobs)")
+        }
+    assert {"original_path", "original_size_bytes"} <= asset_columns
+    assert "original_prompt" in job_columns
 
 
 def test_share_tokens_are_unique_per_job(settings: Settings) -> None:

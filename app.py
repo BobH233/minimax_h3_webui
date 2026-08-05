@@ -91,6 +91,9 @@ class UserUpdate(BaseModel):
 
 class JobCreate(BaseModel):
     prompt: str
+    original_prompt: str | None = Field(
+        default=None, max_length=LIMITS.prompt_max_chars
+    )
     asset_ids: list[str] = Field(min_length=1, max_length=LIMITS.media_max_count)
     seconds: int = Field(default=5, ge=LIMITS.seconds_min, le=LIMITS.seconds_max)
     aspect_ratio: str = "16:9"
@@ -452,6 +455,7 @@ def _job_payload(connection: Any, row: Any, include_user: bool = False) -> dict[
     value = {
         "id": row["id"],
         "prompt": row["prompt"],
+        "original_prompt": row["original_prompt"],
         "status": row["status"],
         "stage": row["stage"],
         "error": row["error"],
@@ -826,15 +830,16 @@ def create_job(
         connection.execute(
             """
             INSERT INTO jobs(
-                id, user_id, prompt, compiled_prompt, payload_json, status, stage,
-                seconds, aspect_ratio, seed, num_inference_steps, flow_shift,
-                audio_flow_shift, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, 'queued', '等待生成', ?, ?, ?, ?, ?, ?, ?, ?)
+                id, user_id, prompt, original_prompt, compiled_prompt, payload_json,
+                status, stage, seconds, aspect_ratio, seed, num_inference_steps,
+                flow_shift, audio_flow_shift, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'queued', '等待生成', ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job_id,
                 session["id"],
                 body.prompt.strip(),
+                (body.original_prompt or "").strip() or None,
                 payload["prompt"],
                 json.dumps(payload, ensure_ascii=False),
                 body.seconds,

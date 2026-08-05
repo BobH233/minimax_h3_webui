@@ -118,7 +118,14 @@ onBeforeUnmount(() => window.clearInterval(timer))
       <p v-if="job.error" class="error-panel">{{ job.error }}</p>
 
       <div class="detail-grid">
-        <section class="detail-block prompt-block"><h2>提示词</h2><PromptText :prompt="job.prompt" :assets="job.assets" /></section>
+        <section class="detail-block prompt-block">
+          <h2>提示词</h2>
+          <PromptText :prompt="job.prompt" :assets="job.assets" />
+          <div v-if="job.original_prompt" class="original-prompt">
+            <h2>优化前提示词</h2>
+            <PromptText :prompt="job.original_prompt" :assets="job.assets" />
+          </div>
+        </section>
         <section class="detail-block metrics-block">
           <h2>任务信息</h2>
           <dl>
