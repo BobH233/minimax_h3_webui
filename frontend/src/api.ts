@@ -19,6 +19,8 @@ export interface Asset {
   kind: MediaKind
   original_name: string
   size_bytes: number
+  compressed: boolean
+  original_size_bytes: number | null
   duration_seconds: number | null
   created_at: number
   content_url: string
@@ -234,4 +236,11 @@ export function formatDuration(seconds: number | null): string {
 export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+export function formatAssetSize(asset: Asset): string {
+  if (asset.compressed && asset.original_size_bytes !== null) {
+    return `${formatBytes(asset.original_size_bytes)} → ${formatBytes(asset.size_bytes)} · 已压缩`
+  }
+  return formatBytes(asset.size_bytes)
 }

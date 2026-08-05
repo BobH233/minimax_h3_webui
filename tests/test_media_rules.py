@@ -2,16 +2,19 @@ from __future__ import annotations
 
 from base64 import b64decode
 from io import BytesIO
+from pathlib import Path
 
 from PIL import Image
 
 from config import Settings
 from media import (
+    IMAGE_REFERENCE_MAX_BYTES,
     LLM_IMAGE_MAX_BYTES,
     MediaAsset,
     ensure_thumbnail,
     image_llm_data_uri,
     image_preview_data_uri,
+    ingest_upload,
     validate_assets,
 )
 
@@ -83,3 +86,31 @@ def test_llm_image_preserves_frame_and_stays_under_limit(settings: Settings) -> 
     assert len(value) < LLM_IMAGE_MAX_BYTES
     with Image.open(BytesIO(value)) as image:
         assert image.size == (1280, 640)
+
+
+def test_large_upload_keeps_original_and_uses_compressed_reference(
+    settings: Settings,
+) -> None:
+    source = settings.temp_root / "large.png"
+    Image.effect_noise((2600, 1800), 100).convert("RGB").save(source)
+    assert source.stat().st_size > IMAGE_REFERENCE_MAX_BYTES
+
+    asset = ingest_upload(source, "image", "user", settings)
+
+    assert asset.original_path is not None
+    assert asset.original_size_bytes == source.stat().st_size
+    assert Path(asset.original_path).is_file()
+    assert Path(asset.path).is_file()
+    assert Path(asset.path) != Path(asset.original_path)
+    assert asset.size_bytes < IMAGE_REFERENCE_MAX_BYTES
+
+
+def test_small_upload_is_not_compressed(settings: Settings) -> None:
+    source = settings.temp_root / "small.png"
+    Image.new("RGB", (320, 240), "red").save(source)
+
+    asset = ingest_upload(source, "image", "user", settings)
+
+    assert asset.original_path is None
+    assert asset.original_size_bytes is None
+    assert asset.size_bytes == source.stat().st_size

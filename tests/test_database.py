@@ -6,6 +6,33 @@ from config import Settings
 from database import Database
 
 
+def test_existing_assets_table_gets_compression_columns(settings: Settings) -> None:
+    settings.database_path.parent.mkdir(parents=True, exist_ok=True)
+    with Database(settings.database_path).connect() as connection:
+        connection.execute(
+            """
+            CREATE TABLE assets (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                path TEXT NOT NULL UNIQUE,
+                original_name TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                duration_seconds REAL,
+                created_at REAL NOT NULL,
+                deleted_at REAL
+            )
+            """
+        )
+
+    database = Database(settings.database_path)
+    database.initialize()
+
+    with database.connect() as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(assets)")}
+    assert {"original_path", "original_size_bytes"} <= columns
+
+
 def test_share_tokens_are_unique_per_job(settings: Settings) -> None:
     database = Database(settings.database_path)
     database.initialize()

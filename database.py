@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS assets (
     path TEXT NOT NULL UNIQUE,
     original_name TEXT NOT NULL,
     size_bytes INTEGER NOT NULL,
+    original_path TEXT,
+    original_size_bytes INTEGER,
     duration_seconds REAL,
     created_at REAL NOT NULL,
     deleted_at REAL
@@ -114,4 +116,13 @@ class Database:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.execute("PRAGMA synchronous = NORMAL")
             connection.executescript(SCHEMA)
+            columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(assets)")
+            }
+            if "original_path" not in columns:
+                connection.execute("ALTER TABLE assets ADD COLUMN original_path TEXT")
+            if "original_size_bytes" not in columns:
+                connection.execute(
+                    "ALTER TABLE assets ADD COLUMN original_size_bytes INTEGER"
+                )
         self.path.chmod(0o600)

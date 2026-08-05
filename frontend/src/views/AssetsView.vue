@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
 import { IconUpload } from "@tabler/icons-vue"
-import { api, formatBytes, formatDate, formatDuration, type Asset, type MediaKind } from "../api"
+import { api, formatAssetSize, formatDate, formatDuration, type Asset, type MediaKind } from "../api"
 import AssetThumb from "../components/AssetThumb.vue"
 import AudioPreview from "../components/AudioPreview.vue"
 
@@ -67,7 +67,7 @@ onMounted(async () => {
       <article v-for="asset in visible" :key="asset.id" class="asset-card">
         <AssetThumb :asset="asset" />
         <AudioPreview v-if="asset.kind === 'audio'" :src="asset.content_url" />
-        <div class="asset-card-copy"><strong>{{ asset.original_name }}</strong><span>{{ formatBytes(asset.size_bytes) }}<template v-if="asset.duration_seconds"> / {{ formatDuration(asset.duration_seconds) }}</template></span><time>{{ formatDate(asset.created_at) }}</time></div>
+        <div class="asset-card-copy"><strong>{{ asset.original_name }}</strong><span>{{ formatAssetSize(asset) }}<template v-if="asset.duration_seconds"> / {{ formatDuration(asset.duration_seconds) }}</template></span><time>{{ formatDate(asset.created_at) }}</time></div>
       </article>
     </div>
     <div v-else class="empty-state"><IconUpload :size="34" :stroke-width="1.5" /><h2>素材库为空</h2><button type="button" @click="input?.click()">上传素材</button></div>

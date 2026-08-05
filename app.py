@@ -38,6 +38,7 @@ from media import (
     MAX_BYTES,
     MediaAsset,
     MediaValidationError,
+    compress_reference_image,
     ensure_thumbnail,
     ensure_within,
     image_llm_data_uri,
@@ -265,14 +266,17 @@ def _sse(payload: dict[str, Any]) -> str:
 
 
 def _asset_payload(row: Any) -> dict[str, Any]:
+    compressed = row["original_size_bytes"] is not None
     return {
         "id": row["id"],
         "kind": row["kind"],
         "original_name": row["original_name"],
         "size_bytes": row["size_bytes"],
+        "compressed": compressed,
+        "original_size_bytes": row["original_size_bytes"],
         "duration_seconds": row["duration_seconds"],
         "created_at": row["created_at"],
-        "content_url": f"/api/assets/{row['id']}/content",
+        "content_url": f"/api/assets/{row['id']}/content?v={row['size_bytes']}",
         "thumbnail_url": (
             f"/api/assets/{row['id']}/thumbnail-v1.jpg"
             if row["kind"] in {"image", "video"}
@@ -289,6 +293,8 @@ def _row_asset(row: Any) -> MediaAsset:
         original_name=row["original_name"],
         size_bytes=row["size_bytes"],
         duration_seconds=row["duration_seconds"],
+        original_path=row["original_path"],
+        original_size_bytes=row["original_size_bytes"],
     )
 
 
@@ -309,7 +315,35 @@ def _user_assets(asset_ids: list[str], user_id: str) -> list[MediaAsset]:
     by_id = {row["id"]: row for row in rows}
     if len(by_id) != len(asset_ids):
         raise HTTPException(status_code=400, detail="存在不可用的素材")
-    return [_row_asset(by_id[asset_id]) for asset_id in asset_ids]
+    assets = [_row_asset(by_id[asset_id]) for asset_id in asset_ids]
+    prepared: list[MediaAsset] = []
+    updates: list[tuple[str, int, str, int, str]] = []
+    try:
+        for asset in assets:
+            value = compress_reference_image(asset, settings)
+            prepared.append(value)
+            if value.path != asset.path:
+                updates.append(
+                    (
+                        value.path,
+                        value.size_bytes,
+                        value.original_path or asset.path,
+                        value.original_size_bytes or asset.size_bytes,
+                        asset.id,
+                    )
+                )
+    except MediaValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if updates:
+        with database.connect() as connection:
+            connection.executemany(
+                """
+                UPDATE assets SET path = ?, size_bytes = ?, original_path = ?,
+                    original_size_bytes = ? WHERE id = ?
+                """,
+                updates,
+            )
+    return prepared
 
 
 def _cached_file(
@@ -471,7 +505,9 @@ def _shared_job(connection: Any, token: str) -> Any:
 def _public_share_payload(connection: Any, row: Any, token: str) -> dict[str, Any]:
     assets = _job_assets(connection, row["id"])
     for asset in assets:
-        asset["content_url"] = f"/api/public/shares/{token}/assets/{asset['id']}"
+        asset["content_url"] = (
+            f"/api/public/shares/{token}/assets/{asset['id']}?v={asset['size_bytes']}"
+        )
         if asset["thumbnail_url"]:
             asset["thumbnail_url"] = (
                 f"/api/public/shares/{token}/assets/{asset['id']}/thumbnail-v1.jpg"
@@ -692,8 +728,8 @@ async def upload_assets(
                     """
                     INSERT INTO assets(
                         id, user_id, kind, path, original_name, size_bytes,
-                        duration_seconds, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        original_path, original_size_bytes, duration_seconds, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         asset.id,
@@ -702,6 +738,8 @@ async def upload_assets(
                         asset.path,
                         safe_name,
                         asset.size_bytes,
+                        asset.original_path,
+                        asset.original_size_bytes,
                         asset.duration_seconds,
                         now,
                     ),
@@ -734,7 +772,10 @@ def asset_content(
     if path.is_symlink() or not path.is_file():
         raise HTTPException(status_code=404, detail="素材文件不存在")
     return _cached_file(
-        request, path, mimetypes.guess_type(path.name)[0], f"asset-{asset_id}"
+        request,
+        path,
+        mimetypes.guess_type(path.name)[0],
+        f"asset-{asset_id}-{row['size_bytes']}",
     )
 
 
@@ -1011,7 +1052,10 @@ def public_share_asset(token: str, asset_id: str, request: Request) -> Response:
     if path.is_symlink() or not path.is_file():
         raise HTTPException(status_code=404, detail="素材文件不存在")
     return _cached_file(
-        request, path, mimetypes.guess_type(path.name)[0], f"shared-asset-{asset_id}"
+        request,
+        path,
+        mimetypes.guess_type(path.name)[0],
+        f"shared-asset-{asset_id}-{row['size_bytes']}",
     )
 
 

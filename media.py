@@ -7,7 +7,7 @@ import subprocess
 import uuid
 from base64 import b64encode
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
@@ -36,6 +36,7 @@ LABELS = {"image": "Picture", "video": "Video", "audio": "Audio"}
 MENTION_LABELS = {"image": "图", "video": "视频", "audio": "音频"}
 THUMBNAIL_SIZE = (480, 360)
 LLM_IMAGE_MAX_BYTES = 500 * 1024
+IMAGE_REFERENCE_MAX_BYTES = 1024 * 1024
 
 
 class MediaValidationError(ValueError):
@@ -50,6 +51,8 @@ class MediaAsset:
     original_name: str
     size_bytes: int
     duration_seconds: float | None = None
+    original_path: str | None = None
+    original_size_bytes: int | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -110,6 +113,72 @@ def image_llm_data_uri(asset: MediaAsset, settings: Settings) -> str:
     except (UnidentifiedImageError, OSError) as exc:
         raise MediaValidationError("无法压缩参考图片") from exc
     raise MediaValidationError("参考图片压缩后仍然过大")
+
+
+def compress_reference_image(asset: MediaAsset, settings: Settings) -> MediaAsset:
+    if asset.kind != "image" or asset.size_bytes <= IMAGE_REFERENCE_MAX_BYTES:
+        return asset
+    source = ensure_within(
+        Path(asset.original_path or asset.path), settings.uploads_root
+    )
+    if source.is_symlink() or not source.is_file():
+        raise MediaValidationError("素材文件不存在或不安全")
+    destination = ensure_within(
+        source.with_name(f"{source.stem}.reference.jpg"), settings.uploads_root
+    )
+    temporary = ensure_within(
+        destination.with_name(f".{destination.stem}.{uuid.uuid4().hex}.jpg"),
+        settings.uploads_root,
+    )
+    try:
+        with Image.open(source) as original:
+            image = ImageOps.exif_transpose(original)
+            if image.mode in {"RGBA", "LA"} or (
+                image.mode == "P" and "transparency" in image.info
+            ):
+                rgba = image.convert("RGBA")
+                base = Image.new("RGB", rgba.size, "white")
+                base.paste(rgba, mask=rgba.getchannel("A"))
+            else:
+                base = image.convert("RGB")
+
+            value: bytes | None = None
+            for maximum_edge in (2048, 1920, 1600, 1440, 1280, 1024, 768, 512):
+                candidate = base.copy()
+                candidate.thumbnail(
+                    (maximum_edge, maximum_edge), Image.Resampling.LANCZOS
+                )
+                for quality in (90, 84, 78, 72, 66, 60, 54, 48, 42):
+                    output = BytesIO()
+                    candidate.save(
+                        output,
+                        format="JPEG",
+                        quality=quality,
+                        optimize=True,
+                        subsampling="4:2:0",
+                    )
+                    if len(output.getbuffer()) < IMAGE_REFERENCE_MAX_BYTES:
+                        value = output.getvalue()
+                        break
+                if value is not None:
+                    break
+        if value is None:
+            raise MediaValidationError("参考图片压缩后仍然过大")
+        with temporary.open("xb") as output_file:
+            output_file.write(value)
+        temporary.chmod(0o600)
+        os.replace(temporary, destination)
+    except (UnidentifiedImageError, OSError) as exc:
+        raise MediaValidationError("无法压缩参考图片") from exc
+    finally:
+        temporary.unlink(missing_ok=True)
+    return replace(
+        asset,
+        path=str(destination),
+        size_bytes=destination.stat().st_size,
+        original_path=asset.original_path or asset.path,
+        original_size_bytes=asset.original_size_bytes or asset.size_bytes,
+    )
 
 
 def file_uri(asset: MediaAsset, settings: Settings) -> str:
@@ -290,7 +359,7 @@ def ingest_upload(
     except Exception:
         destination.unlink(missing_ok=True)
         raise
-    return MediaAsset(
+    asset = MediaAsset(
         id=uuid.uuid4().hex,
         kind=kind,
         path=str(destination),
@@ -298,6 +367,11 @@ def ingest_upload(
         size_bytes=size,
         duration_seconds=duration,
     )
+    try:
+        return compress_reference_image(asset, settings)
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
 
 
 def labels_for_assets(assets: Iterable[MediaAsset]) -> dict[str, str]:
@@ -373,7 +447,8 @@ def validate_assets(assets: list[MediaAsset]) -> list[str]:
 
 
 def remove_asset_file(asset: MediaAsset, settings: Settings) -> None:
-    path = ensure_within(Path(asset.path), settings.uploads_root)
-    if path.is_symlink():
-        raise MediaValidationError("拒绝删除符号链接")
-    path.unlink(missing_ok=True)
+    for value in {asset.path, asset.original_path} - {None}:
+        path = ensure_within(Path(value), settings.uploads_root)
+        if path.is_symlink():
+            raise MediaValidationError("拒绝删除符号链接")
+        path.unlink(missing_ok=True)

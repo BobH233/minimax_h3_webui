@@ -21,6 +21,7 @@ defineProps<{ job: Job }>()
       <div class="job-meta">
         <span>{{ job.seconds }} 秒</span>
         <span>{{ job.aspect_ratio }}</span>
+        <span v-if="job.assets.some((asset) => asset.compressed)">参考图已压缩</span>
         <span v-if="job.status === 'queued'">前方 {{ job.queue_ahead }} 个</span>
         <span v-else-if="job.elapsed_seconds !== null"><IconClock :size="15" />{{ formatDuration(job.elapsed_seconds) }}</span>
       </div>
