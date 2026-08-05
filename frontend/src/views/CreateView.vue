@@ -30,6 +30,7 @@ const audioFlowShift = ref(3)
 const uploading = ref(false)
 const submitting = ref(false)
 const optimizing = ref(false)
+const optimizeWithImages = ref(true)
 const error = ref("")
 const optimizeError = ref("")
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -143,7 +144,15 @@ async function optimizePrompt(): Promise<void> {
   try {
     await streamApi<PromptStreamEvent>(
       "/api/prompt/optimize",
-      { method: "POST", body: JSON.stringify({ prompt: original, asset_ids: selected.value.map((asset) => asset.id) }) },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          prompt: original,
+          asset_ids: optimizeWithImages.value
+            ? selected.value.filter((asset) => asset.kind === "image").map((asset) => asset.id)
+            : [],
+        }),
+      },
       (event) => {
         if (event.type === "delta") {
           if (!receiving) prompt.value = ""
@@ -224,6 +233,11 @@ onMounted(async () => {
         <MentionComposer v-model="prompt" :assets="selectedWithMentions" :disabled="optimizing" :max-length="config?.limits.prompt_max_chars || 8000" />
         <div class="prompt-actions">
           <p v-if="optimizeError" class="form-error">{{ optimizeError }}</p>
+          <label class="optimize-image-toggle">
+            <input v-model="optimizeWithImages" type="checkbox" :disabled="optimizing" />
+            <span class="toggle-control" aria-hidden="true" />
+            <span>发送参考图</span>
+          </label>
           <button class="secondary-button optimize-prompt-button" type="button" :disabled="optimizing || submitting || !prompt.trim()" @click="optimizePrompt">
             <IconSparkles :size="18" />{{ optimizing ? "正在优化提示词" : "智能优化提示词" }}
           </button>

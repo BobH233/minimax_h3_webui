@@ -157,6 +157,14 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .mention-name { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .prompt-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; min-height: 42px; margin-top: 10px; }
 .prompt-actions .form-error { margin-right: auto; }
+.optimize-image-toggle { position: relative; display: inline-flex; flex-direction: row; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 650; cursor: pointer; }
+.optimize-image-toggle input { position: absolute; width: 1px; min-height: 0; height: 1px; margin: 0; padding: 0; opacity: 0; }
+.toggle-control { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--surface-3); transition: background-color 140ms ease; }
+.toggle-control::after { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 24%, transparent); content: ""; transition: transform 140ms ease; }
+.optimize-image-toggle input:checked + .toggle-control { background: var(--accent); }
+.optimize-image-toggle input:checked + .toggle-control::after { transform: translateX(14px); }
+.optimize-image-toggle input:focus-visible + .toggle-control { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 2px; }
+.optimize-image-toggle:has(input:disabled) { opacity: .5; cursor: not-allowed; }
 .optimize-prompt-button { color: var(--accent); }
 .selected-heading { margin-top: 28px; }
 .selected-list { display: grid; border-top: 1px solid var(--line); }
