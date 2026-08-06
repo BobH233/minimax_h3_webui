@@ -330,6 +330,19 @@ dd { margin: 0; font: 600 12px ui-monospace, monospace; }
 .service-status p { grid-column: 1 / -1; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .system-number { display: grid; align-content: space-between; }
 .system-number strong { font: 750 34px ui-monospace, monospace; }
+.backend-section { margin-bottom: 38px; }
+.backend-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.backend-card { display: grid; gap: 18px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.backend-card header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.backend-card header div { display: flex; align-items: center; gap: 8px; }
+.backend-card header svg { color: var(--muted); }
+.backend-card.online header svg { color: var(--accent); }
+.backend-card header > span { color: var(--muted); font-size: 11px; font-weight: 700; }
+.backend-card dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0; }
+.backend-card dl div { display: grid; gap: 4px; min-width: 0; }
+.backend-card dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.backend-card dd a { color: var(--accent); }
+.backend-card button { justify-self: end; }
 .llm-settings { margin-bottom: 38px; padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .llm-settings-form { display: grid; grid-template-columns: minmax(220px, 1.5fr) minmax(160px, 1fr) minmax(180px, 1fr) auto; align-items: end; gap: 12px; }
 .llm-settings-actions { display: flex; gap: 8px; }
@@ -371,6 +384,7 @@ dd { margin: 0; font: 600 12px ui-monospace, monospace; }
   .asset-picker, .asset-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .detail-assets { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .gpu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .backend-grid { grid-template-columns: 1fr; }
   .system-overview { grid-template-columns: 2fr 1fr 1fr; }
   .system-overview .system-number:last-child { display: none; }
   .llm-settings-form { grid-template-columns: 1fr 1fr; }
@@ -420,6 +434,7 @@ dd { margin: 0; font: 600 12px ui-monospace, monospace; }
   .llm-settings-form { grid-template-columns: 1fr; }
   .llm-settings-actions { justify-content: flex-end; }
   .gpu-grid { grid-template-columns: 1fr; }
+  .backend-card dl { grid-template-columns: 1fr 1fr; }
   .public-share-page { padding: 22px 16px 48px; }
   .public-share-grid { grid-template-columns: 1fr; gap: 26px; }
   .public-assets { grid-template-columns: 1fr; }

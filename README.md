@@ -14,7 +14,7 @@
 - 音频素材在线播放试听
 - MiniMax-H3 提示词智能优化，支持 OpenAI 兼容接口和 SSE 流式回填
 - SQLite 多用户系统和管理员后台
-- 按用户权重排序的单并发任务队列
+- 按用户权重排序的多实例并行任务队列
 - 用户查看、取消自己的排队任务并永久下载结果
 - 管理员管理用户、查看总队列和 GPU 状态
 - 已完成视频生成公开分享链接
@@ -29,9 +29,11 @@ flowchart LR
     Nginx --> WebUI[FastAPI + Vue]
     WebUI --> DB[(SQLite)]
     WebUI --> Files[素材与生成文件]
-    WebUI --> Queue[单并发优先级队列]
-    Queue --> SGLang[SGLang Ref2VA]
-    SGLang --> GPU[多卡 GPU]
+    WebUI --> Queue[优先级队列]
+    Queue --> SGLangA[SGLang GPU 4-7]
+    Queue --> SGLangB[SGLang GPU 0-3]
+    SGLangA --> GPU[多卡 GPU]
+    SGLangB --> GPU
     WebUI --> Proxy[HTTP 代理]
     Proxy --> LLM[OpenAI 兼容 LLM]
 ```
@@ -86,10 +88,13 @@ bash scripts/start_webui.sh
 | --- | --- | --- |
 | `H3_MODEL_ROOT` | Ref2VA 模型目录 | `/data/MiniMax-H3/Ref2VA` |
 | `H3_API_BASE` | 本机 SGLang API | `http://127.0.0.1:30011` |
+| `H3_PRIMARY_GPU_IDS` | 主实例使用的 GPU | `4,5,6,7` |
+| `H3_SECONDARY_API_BASE` | 第二个 SGLang API；留空则禁用 | `http://127.0.0.1:30012` |
+| `H3_SECONDARY_GPU_IDS` | 第二个实例使用的 GPU | `0,1,2,3` |
 | `H3_WEB_HOST` | WebUI 监听地址 | `127.0.0.1` |
 | `H3_WEB_PORT` | WebUI 端口 | `7861` |
 | `H3_DATA_ROOT` | SQLite、素材、缩略图和输出目录 | `/data/minimax-h3-webui-data` |
-| `H3_PHYSICAL_GPU_IDS` | 管理后台显示的 GPU | `0,1,2,3` |
+| `H3_PHYSICAL_GPU_IDS` | 管理后台显示的 GPU | `0,1,2,3,4,5,6,7` |
 | `H3_OUTBOUND_PROXY` | WebUI 外部 LLM 请求使用的 HTTP 代理 | `http://127.0.0.1:8897` |
 | `H3_SECURE_COOKIE` | HTTPS 部署时启用 Secure Cookie | `0` |
 
@@ -111,13 +116,25 @@ bash scripts/start_webui.sh
 bash scripts/start_sglang.sh
 ```
 
+单独启动第二个实例：
+
+```bash
+bash scripts/start_sglang_secondary.sh
+```
+
 同时启动 SGLang 与 WebUI：
 
 ```bash
 bash scripts/start_all.sh
 ```
 
-脚本会跳过已经运行的服务，不会重复启动同一端口。
+设置 `H3_START_SECONDARY=1` 后，一键脚本会启动两个实例，并跳过已经运行的端口。
+
+管理员可以在“系统 → 推理实例”中停止或恢复某个实例派活。停止派活不会中断正在执行的任务；实例空闲后可手动停止：
+
+```bash
+bash scripts/stop_sglang.sh 30012
+```
 
 ## 提示词与参考素材
 
@@ -171,6 +188,8 @@ location = /api/prompt/optimize {
 ## 队列规则
 
 - 正在执行的任务不会被抢占。
+- 每个在线且允许派活的 SGLang 实例同时执行一个任务。
+- 任意一个实例离线时，其余在线实例继续领取任务。
 - 排队任务按用户权重从高到低排序。
 - 权重相同时按任务提交时间排序。
 - 高权重用户的新任务可以排在低权重用户尚未执行的任务之前。
@@ -193,7 +212,7 @@ npm run build
 app.py                  FastAPI 路由、鉴权和管理接口
 database.py             SQLite 表结构与初始化
 h3_client.py            SGLang Ref2VA API 客户端
-scheduler.py            单并发优先级队列 Worker
+scheduler.py            多实例并行优先级队列 Worker
 media.py                素材校验、保存和缩略图
 prompt_optimizer.py     OpenAI 兼容 LLM 与流式提示词优化
 minimax_gen_prompt.txt  MiniMax-H3 提示词模板

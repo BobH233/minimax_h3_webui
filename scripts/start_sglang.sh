@@ -21,6 +21,10 @@ fi
 : "${H3_HOST_DATA_ROOT:=/data}"
 : "${H3_HTTP_PROXY:=http://127.0.0.1:8897}"
 
+H3_GPU_IDS="${H3_INSTANCE_GPU_IDS:-$H3_GPU_IDS}"
+H3_API_PORT="${H3_INSTANCE_API_PORT:-$H3_API_PORT}"
+H3_RUNTIME_ROOT="${H3_INSTANCE_RUNTIME_ROOT:-$H3_RUNTIME_ROOT}"
+
 for path in "$H3_MODEL_PATH/model_index.json" "$H3_SGLANG_IMAGE" "$H3_CUDA_COMPAT/libcuda.so.1"; do
   if [[ ! -e "$path" ]]; then
     echo "Missing required path: $path" >&2

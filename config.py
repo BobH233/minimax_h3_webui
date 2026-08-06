@@ -52,6 +52,14 @@ OUTPUT_SIZE_CHOICES = [
 ]
 
 
+@dataclass(frozen=True)
+class SGLangBackend:
+    id: str
+    name: str
+    api_base: str
+    gpu_ids: tuple[int, ...]
+
+
 def _int_env(name: str, default: int, minimum: int = 1) -> int:
     raw = os.getenv(name, str(default))
     try:
@@ -89,20 +97,49 @@ class Settings:
     session_days: int = 30
     secure_cookie: bool = False
     outbound_proxy: str = "http://127.0.0.1:8897"
+    primary_gpu_ids: tuple[int, ...] = ()
+    secondary_api_base: str | None = None
+    secondary_gpu_ids: tuple[int, ...] = ()
 
     @classmethod
     def from_env(cls) -> Settings:
-        api_base = os.getenv("H3_API_BASE", "http://127.0.0.1:30011").rstrip("/")
-        if not api_base.startswith(("http://127.0.0.1", "http://localhost")):
-            raise ValueError("H3_API_BASE 必须指向本机 127.0.0.1 或 localhost")
+        def local_api_base(name: str, default: str = "") -> str | None:
+            value = os.getenv(name, default).strip().rstrip("/")
+            if not value:
+                return None
+            parsed = urlsplit(value)
+            if parsed.scheme != "http" or parsed.hostname not in {
+                "127.0.0.1",
+                "localhost",
+            }:
+                raise ValueError(f"{name} 必须指向本机 127.0.0.1 或 localhost")
+            return value
 
-        gpu_raw = os.getenv("H3_PHYSICAL_GPU_IDS", "0,1,2,3")
-        try:
-            gpu_ids = tuple(int(item.strip()) for item in gpu_raw.split(",") if item.strip())
-        except ValueError as exc:
-            raise ValueError("H3_PHYSICAL_GPU_IDS 必须是逗号分隔的整数") from exc
-        if not gpu_ids:
-            raise ValueError("H3_PHYSICAL_GPU_IDS 不能为空")
+        def gpu_ids(name: str, default: str) -> tuple[int, ...]:
+            raw = os.getenv(name, default)
+            try:
+                values = tuple(
+                    int(item.strip()) for item in raw.split(",") if item.strip()
+                )
+            except ValueError as exc:
+                raise ValueError(f"{name} 必须是逗号分隔的整数") from exc
+            if not values:
+                raise ValueError(f"{name} 不能为空")
+            return values
+
+        api_base = local_api_base("H3_API_BASE", "http://127.0.0.1:30011")
+        assert api_base is not None
+        secondary_api_base = local_api_base("H3_SECONDARY_API_BASE")
+
+        physical_gpu_ids = gpu_ids("H3_PHYSICAL_GPU_IDS", "0,1,2,3")
+        primary_gpu_ids = gpu_ids(
+            "H3_PRIMARY_GPU_IDS", os.getenv("H3_PHYSICAL_GPU_IDS", "0,1,2,3")
+        )
+        secondary_gpu_ids = (
+            gpu_ids("H3_SECONDARY_GPU_IDS", "0,1,2,3")
+            if secondary_api_base
+            else ()
+        )
 
         host = os.getenv("H3_WEB_HOST", "127.0.0.1")
         if host not in {"127.0.0.1", "localhost", "0.0.0.0"}:
@@ -131,13 +168,43 @@ class Settings:
             data_root=data_root,
             poll_seconds=_float_env("H3_POLL_SECONDS", 2.0),
             task_timeout_seconds=_int_env("H3_TASK_TIMEOUT_SECONDS", 7200),
-            physical_gpu_ids=gpu_ids,
+            physical_gpu_ids=physical_gpu_ids,
             request_connect_timeout=_float_env("H3_CONNECT_TIMEOUT_SECONDS", 3.0),
             request_read_timeout=_float_env("H3_READ_TIMEOUT_SECONDS", 30.0),
             session_days=_int_env("H3_SESSION_DAYS", 30),
             secure_cookie=os.getenv("H3_SECURE_COOKIE", "0") == "1",
             outbound_proxy=outbound_proxy,
+            primary_gpu_ids=primary_gpu_ids,
+            secondary_api_base=secondary_api_base,
+            secondary_gpu_ids=secondary_gpu_ids,
         )
+
+    @property
+    def backends(self) -> tuple[SGLangBackend, ...]:
+        def name(gpu_ids: tuple[int, ...]) -> str:
+            if gpu_ids == tuple(range(gpu_ids[0], gpu_ids[-1] + 1)):
+                return f"GPU {gpu_ids[0]}–{gpu_ids[-1]}"
+            return "GPU " + ", ".join(map(str, gpu_ids))
+
+        primary_gpu_ids = self.primary_gpu_ids or self.physical_gpu_ids
+        values = [
+            SGLangBackend(
+                "primary",
+                name(primary_gpu_ids),
+                self.api_base,
+                primary_gpu_ids,
+            )
+        ]
+        if self.secondary_api_base:
+            values.append(
+                SGLangBackend(
+                    "secondary",
+                    name(self.secondary_gpu_ids),
+                    self.secondary_api_base,
+                    self.secondary_gpu_ids,
+                )
+            )
+        return tuple(values)
 
     @property
     def uploads_root(self) -> Path:

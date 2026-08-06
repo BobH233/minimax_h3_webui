@@ -76,3 +76,83 @@ def test_weight_change_reorders_unstarted_jobs(settings: Settings) -> None:
     worker = QueueWorker(settings, database, Client())  # type: ignore[arg-type]
     claimed = worker._claim_next()
     assert claimed and claimed["id"] == "job-second"
+
+
+def test_two_backends_claim_different_jobs(settings: Settings) -> None:
+    database = Database(settings.database_path)
+    database.initialize()
+    now = time.time()
+    with database.connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO users(
+                id, username, password_hash, password_salt, weight,
+                is_admin, is_active, created_at, updated_at
+            ) VALUES ('user', 'user', 'hash', 'salt', 0, 0, 1, ?, ?)
+            """,
+            (now, now),
+        )
+        for index in range(2):
+            connection.execute(
+                """
+                INSERT INTO jobs(
+                    id, user_id, prompt, compiled_prompt, payload_json, status,
+                    stage, seconds, aspect_ratio, seed, num_inference_steps,
+                    flow_shift, audio_flow_shift, created_at, updated_at
+                ) VALUES (?, 'user', 'p', 'p', '{}', 'queued', '等待生成',
+                          5, '16:9', 0, 50, 12, 3, ?, ?)
+                """,
+                (f"job-{index}", now + index, now + index),
+            )
+
+    primary = QueueWorker(
+        settings, database, Client(), "primary"  # type: ignore[arg-type]
+    )
+    secondary = QueueWorker(
+        settings, database, Client(), "secondary"  # type: ignore[arg-type]
+    )
+    first = primary._claim_next()
+    second = secondary._claim_next()
+
+    assert first and second and first["id"] != second["id"]
+    assert first["backend_id"] == "primary"
+    assert second["backend_id"] == "secondary"
+
+
+def test_disabled_backend_does_not_claim_new_job(settings: Settings) -> None:
+    database = Database(settings.database_path)
+    database.initialize()
+    now = time.time()
+    with database.connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO users(
+                id, username, password_hash, password_salt, weight,
+                is_admin, is_active, created_at, updated_at
+            ) VALUES ('user', 'user', 'hash', 'salt', 0, 0, 1, ?, ?)
+            """,
+            (now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO jobs(
+                id, user_id, prompt, compiled_prompt, payload_json, status,
+                stage, seconds, aspect_ratio, seed, num_inference_steps,
+                flow_shift, audio_flow_shift, created_at, updated_at
+            ) VALUES ('job', 'user', 'p', 'p', '{}', 'queued', '等待生成',
+                      5, '16:9', 0, 50, 12, 3, ?, ?)
+            """,
+            (now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO backend_controls(id, dispatch_enabled, updated_at)
+            VALUES ('secondary', 0, ?)
+            """,
+            (now,),
+        )
+
+    worker = QueueWorker(
+        settings, database, Client(), "secondary"  # type: ignore[arg-type]
+    )
+    assert worker._claim_next() is None

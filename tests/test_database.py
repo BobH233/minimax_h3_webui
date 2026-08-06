@@ -65,7 +65,12 @@ def test_existing_assets_table_gets_compression_columns(settings: Settings) -> N
             row[1] for row in connection.execute("PRAGMA table_info(jobs)")
         }
     assert {"original_path", "original_size_bytes"} <= asset_columns
-    assert "original_prompt" in job_columns
+    assert {"original_prompt", "backend_id"} <= job_columns
+    with database.connect() as connection:
+        controls = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'backend_controls'"
+        ).fetchone()
+    assert controls is not None
 
 
 def test_share_tokens_are_unique_per_job(settings: Settings) -> None:

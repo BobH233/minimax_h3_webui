@@ -17,13 +17,22 @@ LOGGER = logging.getLogger(__name__)
 
 
 class QueueWorker:
-    def __init__(self, settings: Settings, database: Database, client: H3Client):
+    def __init__(
+        self,
+        settings: Settings,
+        database: Database,
+        client: H3Client,
+        backend_id: str = "primary",
+    ):
         self.settings = settings
         self.database = database
         self.client = client
+        self.backend_id = backend_id
         self._wake = threading.Event()
         self._closed = threading.Event()
-        self._thread = threading.Thread(target=self._run, name="h3-queue", daemon=True)
+        self._thread = threading.Thread(
+            target=self._run, name=f"h3-queue-{backend_id}", daemon=True
+        )
 
     def start(self) -> None:
         self._recover()
@@ -52,27 +61,38 @@ class QueueWorker:
 
     def _run(self) -> None:
         while not self._closed.is_set():
-            job = self._claim_next()
+            health = self.client.health()
+            job = self._claim_next(allow_new=health.online)
             if job is None:
                 self._wake.wait(timeout=1)
                 self._wake.clear()
                 continue
             self._process(job)
 
-    def _claim_next(self) -> dict[str, Any] | None:
+    def _claim_next(self, allow_new: bool = True) -> dict[str, Any] | None:
         with self.database.connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             active = connection.execute(
                 """
                 SELECT * FROM jobs
                 WHERE status IN ('submitting', 'generating')
-                  AND remote_id IS NOT NULL AND deleted_at IS NULL
+                  AND backend_id = ? AND remote_id IS NOT NULL
+                  AND deleted_at IS NULL
                 ORDER BY started_at, created_at LIMIT 1
-                """
+                """,
+                (self.backend_id,),
             ).fetchone()
             if active is not None:
                 connection.commit()
                 return dict(active)
+
+            enabled = connection.execute(
+                "SELECT dispatch_enabled FROM backend_controls WHERE id = ?",
+                (self.backend_id,),
+            ).fetchone()
+            if not allow_new or (enabled is not None and not enabled[0]):
+                connection.commit()
+                return None
 
             row = connection.execute(
                 """
@@ -90,16 +110,21 @@ class QueueWorker:
             changed = connection.execute(
                 """
                 UPDATE jobs SET status = 'submitting', stage = '正在提交',
-                    started_at = COALESCE(started_at, ?), updated_at = ?
+                    backend_id = ?, started_at = COALESCE(started_at, ?), updated_at = ?
                 WHERE id = ? AND status = 'queued'
                 """,
-                (now, now, row["id"]),
+                (self.backend_id, now, now, row["id"]),
             ).rowcount
             connection.commit()
             if not changed:
                 return None
             job = dict(row)
-            job.update(status="submitting", stage="正在提交", started_at=now)
+            job.update(
+                status="submitting",
+                stage="正在提交",
+                backend_id=self.backend_id,
+                started_at=now,
+            )
             return job
 
     def _process(self, job: dict[str, Any]) -> None:
@@ -107,6 +132,7 @@ class QueueWorker:
             remote_id = job.get("remote_id")
             if not remote_id:
                 remote_id = self.client.create_video(json.loads(job["payload_json"]))
+                job["remote_id"] = remote_id
                 self._update(
                     job["id"],
                     status="generating",
@@ -117,7 +143,10 @@ class QueueWorker:
             self._poll(job["id"], remote_id, job)
         except H3APIError as exc:
             LOGGER.warning("推理任务失败 job=%s category=%s", job["id"], exc.category)
-            self._finish(job["id"], "failed", "生成失败", str(exc))
+            if not job.get("remote_id") and exc.retryable:
+                self._requeue(job["id"], str(exc))
+            else:
+                self._finish(job["id"], "failed", "生成失败", str(exc))
         except Exception:
             LOGGER.exception("任务处理异常 job=%s", job["id"])
             self._finish(job["id"], "failed", "生成失败", "任务处理发生错误")
@@ -200,9 +229,68 @@ class QueueWorker:
                 (status, stage, error, now, now, job_id),
             )
 
+    def _requeue(self, job_id: str, error: str) -> None:
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                UPDATE jobs SET status = 'queued', stage = '等待可用实例',
+                    backend_id = NULL, remote_id = NULL, started_at = NULL,
+                    progress = NULL, error = ?, updated_at = ? WHERE id = ?
+                """,
+                (error[:500], time.time(), job_id),
+            )
+
     def _update(self, job_id: str, **changes: Any) -> None:
         changes["updated_at"] = time.time()
         columns = ", ".join(f"{name} = ?" for name in changes)
         values = list(changes.values()) + [job_id]
         with self.database.connect() as connection:
             connection.execute(f"UPDATE jobs SET {columns} WHERE id = ?", values)
+
+
+class QueueWorkerPool:
+    def __init__(
+        self, settings: Settings, database: Database, clients: dict[str, H3Client]
+    ):
+        self.database = database
+        self.clients = clients
+        self.workers = {
+            backend_id: QueueWorker(settings, database, client, backend_id)
+            for backend_id, client in clients.items()
+        }
+
+    def start(self) -> None:
+        now = time.time()
+        with self.database.connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO backend_controls(id, dispatch_enabled, updated_at)
+                VALUES (?, 1, ?) ON CONFLICT(id) DO NOTHING
+                """,
+                [(backend_id, now) for backend_id in self.workers],
+            )
+        for worker in self.workers.values():
+            worker.start()
+
+    def close(self) -> None:
+        for worker in self.workers.values():
+            worker.close()
+
+    def notify(self) -> None:
+        for worker in self.workers.values():
+            worker.notify()
+
+    def set_dispatch_enabled(self, backend_id: str, enabled: bool) -> None:
+        if backend_id not in self.workers:
+            raise KeyError(backend_id)
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO backend_controls(id, dispatch_enabled, updated_at)
+                VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+                    dispatch_enabled = excluded.dispatch_enabled,
+                    updated_at = excluded.updated_at
+                """,
+                (backend_id, int(enabled), time.time()),
+            )
+        self.notify()

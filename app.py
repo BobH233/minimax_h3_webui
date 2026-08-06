@@ -55,7 +55,7 @@ from prompt_optimizer import (
     test_connection,
     validated_config,
 )
-from scheduler import QueueWorker
+from scheduler import QueueWorkerPool
 
 logging.basicConfig(
     level=logging.INFO,
@@ -70,8 +70,11 @@ settings = Settings.from_env()
 settings.ensure_directories()
 database = Database(settings.database_path)
 database.initialize()
-client = H3Client(settings)
-worker = QueueWorker(settings, database, client)
+clients = {
+    backend.id: H3Client(settings, api_base=backend.api_base)
+    for backend in settings.backends
+}
+worker = QueueWorkerPool(settings, database, clients)
 
 
 class Credentials(BaseModel):
@@ -114,6 +117,10 @@ class LLMConfigBody(BaseModel):
 class PromptOptimizeBody(BaseModel):
     prompt: str = Field(min_length=1, max_length=LIMITS.prompt_max_chars)
     asset_ids: list[str] = Field(default_factory=list, max_length=LIMITS.media_max_count)
+
+
+class BackendUpdate(BaseModel):
+    dispatch_enabled: bool
 
 
 def _password_hash(password: str, salt: bytes) -> str:
@@ -1359,7 +1366,6 @@ def admin_system(_: dict[str, Any] = Depends(admin_session)) -> dict[str, Any]:
     except (OSError, subprocess.SubprocessError, ValueError):
         LOGGER.exception("无法读取 GPU 状态")
         gpus = []
-    health = client.health()
     with database.connect() as connection:
         counts = {
             row["status"]: row["count"]
@@ -1370,12 +1376,62 @@ def admin_system(_: dict[str, Any] = Depends(admin_session)) -> dict[str, Any]:
                 """
             ).fetchall()
         }
+        controls = {
+            row["id"]: bool(row["dispatch_enabled"])
+            for row in connection.execute(
+                "SELECT id, dispatch_enabled FROM backend_controls"
+            ).fetchall()
+        }
+        active_jobs = {
+            row["backend_id"]: {
+                "id": row["id"],
+                "status": row["status"],
+                "stage": row["stage"],
+            }
+            for row in connection.execute(
+                """
+                SELECT backend_id, id, status, stage FROM jobs
+                WHERE backend_id IS NOT NULL AND deleted_at IS NULL
+                  AND status IN ('submitting', 'generating')
+                """
+            ).fetchall()
+        }
+    backends = []
+    for backend in settings.backends:
+        health = clients[backend.id].health()
+        backends.append(
+            {
+                "id": backend.id,
+                "name": backend.name,
+                "api_base": backend.api_base,
+                "gpu_ids": backend.gpu_ids,
+                "online": health.online,
+                "detail": health.detail,
+                "dispatch_enabled": controls.get(backend.id, True),
+                "active_job": active_jobs.get(backend.id),
+            }
+        )
+    online_count = sum(backend["online"] for backend in backends)
     return {
-        "sglang_online": health.online,
-        "sglang_detail": health.detail,
+        "sglang_online": online_count > 0,
+        "sglang_detail": f"{online_count}/{len(backends)} 个实例在线",
+        "backends": backends,
         "gpus": gpus,
         "job_counts": counts,
     }
+
+
+@app.put("/api/admin/backends/{backend_id}")
+def admin_update_backend(
+    backend_id: str,
+    body: BackendUpdate,
+    _: dict[str, Any] = Depends(admin_csrf_session),
+) -> dict[str, bool]:
+    try:
+        worker.set_dispatch_enabled(backend_id, body.dispatch_enabled)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="推理实例不存在") from exc
+    return {"ok": True, "dispatch_enabled": body.dispatch_enabled}
 
 
 if settings.frontend_dist.is_dir():

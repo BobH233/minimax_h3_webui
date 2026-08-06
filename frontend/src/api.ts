@@ -106,9 +106,21 @@ export interface GpuStatus {
   temperature_c: number
 }
 
+export interface BackendStatus {
+  id: string
+  name: string
+  api_base: string
+  gpu_ids: number[]
+  online: boolean
+  detail: string
+  dispatch_enabled: boolean
+  active_job: { id: string; status: JobStatus; stage: string } | null
+}
+
 export interface SystemStatus {
   sglang_online: boolean
   sglang_detail: string
+  backends: BackendStatus[]
   gpus: GpuStatus[]
   job_counts: Record<string, number>
 }

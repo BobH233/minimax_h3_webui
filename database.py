@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     )),
     stage TEXT NOT NULL,
     remote_id TEXT,
+    backend_id TEXT,
     output_path TEXT,
     error TEXT,
     progress REAL,
@@ -90,12 +91,16 @@ CREATE TABLE IF NOT EXISTS llm_settings (
     updated_at REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS backend_controls (
+    id TEXT PRIMARY KEY,
+    dispatch_enabled INTEGER NOT NULL DEFAULT 1,
+    updated_at REAL NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_assets_user ON assets(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id, created_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_remote_id
-    ON jobs(remote_id) WHERE remote_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_job_shares_token ON job_shares(token);
 """
 
@@ -131,4 +136,19 @@ class Database:
             }
             if "original_prompt" not in job_columns:
                 connection.execute("ALTER TABLE jobs ADD COLUMN original_prompt TEXT")
+            if "backend_id" not in job_columns:
+                connection.execute("ALTER TABLE jobs ADD COLUMN backend_id TEXT")
+            connection.execute("DROP INDEX IF EXISTS idx_jobs_remote_id")
+            connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_backend_remote_id
+                ON jobs(backend_id, remote_id) WHERE remote_id IS NOT NULL
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_jobs_backend_status
+                ON jobs(backend_id, status, started_at)
+                """
+            )
         self.path.chmod(0o600)

@@ -178,9 +178,15 @@ def build_payload(
 
 
 class H3Client:
-    def __init__(self, settings: Settings, session: requests.Session | None = None):
+    def __init__(
+        self,
+        settings: Settings,
+        session: requests.Session | None = None,
+        api_base: str | None = None,
+    ):
         self.settings = settings
         self.session = session or requests.Session()
+        self.api_base = api_base or settings.api_base
         self.timeout = (settings.request_connect_timeout, settings.request_read_timeout)
         self._cancel_route: tuple[str, str] | None | bool = False
 
@@ -188,7 +194,7 @@ class H3Client:
         try:
             response = self.session.request(
                 method,
-                f"{self.settings.api_base}{path}",
+                f"{self.api_base}{path}",
                 timeout=self.timeout,
                 **kwargs,
             )
@@ -252,7 +258,11 @@ class H3Client:
                 return HealthResult(True, "推理服务已连接", endpoint)
             except H3APIError as exc:
                 failures.append(str(exc))
-                if exc.status_code not in {404, 405, None}:
+                if exc.category in {"connection", "timeout"} or exc.status_code not in {
+                    404,
+                    405,
+                    None,
+                }:
                     break
         return HealthResult(False, failures[-1] if failures else "推理服务未连接")
 
