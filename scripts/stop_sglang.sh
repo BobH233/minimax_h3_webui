@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 
 port="${1:-}"
-if [[ "$port" != "30011" && "$port" != "30012" ]]; then
-  echo "Usage: $0 30011|30012" >&2
+if [[ "$port" != "30011" && "$port" != "30111" ]]; then
+  echo "Usage: $0 30011|30111" >&2
   exit 2
 fi
 

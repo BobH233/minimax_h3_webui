@@ -60,5 +60,6 @@ exec apptainer exec \
   --tp-size 2 \
   --ulysses-degree 2 \
   --performance-mode speed \
+  --strict-ports \
   --host "$H3_API_HOST" \
   --port "$H3_API_PORT"

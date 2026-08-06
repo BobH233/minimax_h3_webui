@@ -89,7 +89,7 @@ bash scripts/start_webui.sh
 | `H3_MODEL_ROOT` | Ref2VA 模型目录 | `/data/MiniMax-H3/Ref2VA` |
 | `H3_API_BASE` | 本机 SGLang API | `http://127.0.0.1:30011` |
 | `H3_PRIMARY_GPU_IDS` | 主实例使用的 GPU | `4,5,6,7` |
-| `H3_SECONDARY_API_BASE` | 第二个 SGLang API；留空则禁用 | `http://127.0.0.1:30012` |
+| `H3_SECONDARY_API_BASE` | 第二个 SGLang API；留空则禁用 | `http://127.0.0.1:30111` |
 | `H3_SECONDARY_GPU_IDS` | 第二个实例使用的 GPU | `0,1,2,3` |
 | `H3_WEB_HOST` | WebUI 监听地址 | `127.0.0.1` |
 | `H3_WEB_PORT` | WebUI 端口 | `7861` |
@@ -133,7 +133,7 @@ bash scripts/start_all.sh
 管理员可以在“系统 → 推理实例”中停止或恢复某个实例派活。停止派活不会中断正在执行的任务；实例空闲后可手动停止：
 
 ```bash
-bash scripts/stop_sglang.sh 30012
+bash scripts/stop_sglang.sh 30111
 ```
 
 ## 提示词与参考素材

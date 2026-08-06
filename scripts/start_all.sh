@@ -13,7 +13,7 @@ fi
 : "${H3_RUNTIME_ROOT:=/data/h3-runtime}"
 : "${H3_WEB_PORT:=7861}"
 : "${H3_START_SECONDARY:=0}"
-: "${H3_SECONDARY_API_PORT:=30012}"
+: "${H3_SECONDARY_API_PORT:=30111}"
 mkdir -p "$H3_RUNTIME_ROOT"
 
 if curl -fsS --max-time 2 http://127.0.0.1:30011/health >/dev/null; then

@@ -26,11 +26,11 @@ def test_secondary_backend_configuration(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("H3_DATA_ROOT", str(tmp_path / "data"))
     monkeypatch.setenv("H3_PHYSICAL_GPU_IDS", "0,1,2,3,4,5,6,7")
     monkeypatch.setenv("H3_PRIMARY_GPU_IDS", "4,5,6,7")
-    monkeypatch.setenv("H3_SECONDARY_API_BASE", "http://127.0.0.1:30012")
+    monkeypatch.setenv("H3_SECONDARY_API_BASE", "http://127.0.0.1:30111")
     monkeypatch.setenv("H3_SECONDARY_GPU_IDS", "0,1,2,3")
 
     settings = Settings.from_env()
 
     assert [backend.id for backend in settings.backends] == ["primary", "secondary"]
     assert settings.backends[0].name == "GPU 4–7"
-    assert settings.backends[1].api_base.endswith(":30012")
+    assert settings.backends[1].api_base.endswith(":30111")

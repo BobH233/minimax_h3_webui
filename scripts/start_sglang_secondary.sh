@@ -10,7 +10,7 @@ if [[ -f .env ]]; then
   set +a
 fi
 
-: "${H3_SECONDARY_API_PORT:=30012}"
+: "${H3_SECONDARY_API_PORT:=30111}"
 : "${H3_SECONDARY_GPU_IDS:=0,1,2,3}"
 : "${H3_RUNTIME_ROOT:=/data/h3-runtime}"
 
