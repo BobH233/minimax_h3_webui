@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue"
 import { IconFileMusic, IconMovie } from "@tabler/icons-vue"
-import type { Asset } from "../api"
+import { formatAssetDuration, type Asset } from "../api"
 
 const props = withDefaults(defineProps<{ modelValue: string; assets: Asset[]; disabled?: boolean; maxLength?: number }>(), { disabled: false, maxLength: 8000 })
 const emit = defineEmits<{ "update:modelValue": [value: string] }>()
@@ -201,7 +201,7 @@ onMounted(() => void resize())
           <IconFileMusic v-else :size="20" />
         </span>
         <span class="mention-token">{{ asset.mention }}</span>
-        <span class="mention-name">{{ asset.original_name }}</span>
+        <span class="mention-name">{{ asset.original_name }}<template v-if="asset.kind === 'audio'"> · {{ formatAssetDuration(asset) }}</template></span>
       </button>
     </div>
   </div>

@@ -53,6 +53,7 @@ class MediaAsset:
     duration_seconds: float | None = None
     original_path: str | None = None
     original_size_bytes: int | None = None
+    original_duration_seconds: float | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -323,6 +324,39 @@ def _validate_file(path: Path, kind: MediaKind) -> float | None:
     return duration
 
 
+def _pad_audio(source: Path, destination: Path, seconds: float) -> None:
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-i",
+                str(source),
+                "-af",
+                "apad",
+                "-t",
+                f"{seconds:g}",
+                "-vn",
+                "-c:a",
+                "pcm_s16le",
+                "-y",
+                str(destination),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except FileNotFoundError as exc:
+        raise MediaValidationError("未找到 ffmpeg，请先安装 FFmpeg") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise MediaValidationError("音频扩展处理超时") from exc
+    if result.returncode != 0 or not destination.is_file():
+        raise MediaValidationError("无法将短音频扩展至 2 秒")
+    destination.chmod(0o600)
+
+
 def ingest_upload(
     source: str | Path, kind: MediaKind, session_id: str, settings: Settings
 ) -> MediaAsset:
@@ -341,20 +375,32 @@ def ingest_upload(
             f"文件大小必须大于 0 且不超过 {MAX_BYTES[kind] // 1024**2} MiB"
         )
 
+    original_duration_seconds = None
+    pad_audio = False
+    if kind == "audio":
+        source_duration = probe_media(source_path, "audio")["duration_seconds"]
+        pad_audio = source_duration < LIMITS.media_duration_min
+        if pad_audio:
+            original_duration_seconds = source_duration
+
     session_dir = ensure_within(
         settings.uploads_root / session_id, settings.uploads_root
     )
     session_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    stored_extension = ".wav" if pad_audio else extension
     destination = ensure_within(
-        session_dir / f"{uuid.uuid4().hex}{extension}", settings.uploads_root
+        session_dir / f"{uuid.uuid4().hex}{stored_extension}", settings.uploads_root
     )
     try:
-        with (
-            source_path.open("rb") as source_file,
-            destination.open("xb") as destination_file,
-        ):
-            shutil.copyfileobj(source_file, destination_file, length=1024 * 1024)
-        destination.chmod(0o600)
+        if pad_audio:
+            _pad_audio(source_path, destination, LIMITS.media_duration_min)
+        else:
+            with (
+                source_path.open("rb") as source_file,
+                destination.open("xb") as destination_file,
+            ):
+                shutil.copyfileobj(source_file, destination_file, length=1024 * 1024)
+            destination.chmod(0o600)
         duration = _validate_file(destination, kind)
     except Exception:
         destination.unlink(missing_ok=True)
@@ -364,8 +410,9 @@ def ingest_upload(
         kind=kind,
         path=str(destination),
         original_name=source_path.name,
-        size_bytes=size,
+        size_bytes=destination.stat().st_size,
         duration_seconds=duration,
+        original_duration_seconds=original_duration_seconds,
     )
     try:
         return compress_reference_image(asset, settings)

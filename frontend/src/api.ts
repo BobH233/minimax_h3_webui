@@ -22,6 +22,7 @@ export interface Asset {
   compressed: boolean
   original_size_bytes: number | null
   duration_seconds: number | null
+  original_duration_seconds: number | null
   created_at: number
   content_url: string
   thumbnail_url: string | null
@@ -256,4 +257,16 @@ export function formatAssetSize(asset: Asset): string {
     return `${formatBytes(asset.original_size_bytes)} → ${formatBytes(asset.size_bytes)} · 已压缩`
   }
   return formatBytes(asset.size_bytes)
+}
+
+export function formatAssetDuration(asset: Asset): string {
+  if (asset.duration_seconds === null) return "-"
+  const seconds = (value: number): string => `${Math.round(value * 10) / 10} 秒`
+  if (
+    asset.original_duration_seconds !== null
+    && asset.original_duration_seconds + 0.01 < asset.duration_seconds
+  ) {
+    return `${seconds(asset.original_duration_seconds)} → ${seconds(asset.duration_seconds)} · 已扩展`
+  }
+  return seconds(asset.duration_seconds)
 }

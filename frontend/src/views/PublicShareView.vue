@@ -2,7 +2,7 @@
 import { onMounted, ref } from "vue"
 import { useRoute } from "vue-router"
 import { IconFileMusic, IconMovie } from "@tabler/icons-vue"
-import { api, formatAssetSize, formatDate, formatDuration, type PublicShare } from "../api"
+import { api, formatAssetDuration, formatAssetSize, formatDate, formatDuration, type PublicShare } from "../api"
 import ImagePreview from "../components/ImagePreview.vue"
 import PromptText from "../components/PromptText.vue"
 
@@ -61,7 +61,7 @@ onMounted(async () => {
               <IconFileMusic :size="28" />
               <audio :src="asset.content_url" controls controlslist="nodownload noremoteplayback" preload="metadata" @contextmenu.prevent />
             </div>
-            <div class="public-asset-copy"><strong>{{ asset.mention }}</strong><span>{{ asset.original_name }}</span><span>{{ formatAssetSize(asset) }}</span></div>
+            <div class="public-asset-copy"><strong>{{ asset.mention }}</strong><span>{{ asset.original_name }}</span><span>{{ formatAssetSize(asset) }}<template v-if="asset.duration_seconds"> / {{ formatAssetDuration(asset) }}</template></span></div>
           </article>
         </div>
       </section>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import wave
 from base64 import b64decode
 from io import BytesIO
 from pathlib import Path
@@ -51,6 +52,24 @@ def test_duration_boundaries_and_totals() -> None:
 def test_audio_cannot_be_the_only_reference() -> None:
     errors = validate_assets([item(1, "audio", 4)])
     assert "音频不能作为唯一参考，请添加图片或视频" in errors
+
+
+def test_short_audio_is_extended_to_two_seconds(settings: Settings) -> None:
+    source = settings.temp_root / "short.wav"
+    sample_rate = 16000
+    with wave.open(str(source), "wb") as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(sample_rate)
+        audio.writeframes(b"\0\0" * int(sample_rate * 1.7))
+
+    asset = ingest_upload(source, "audio", "user", settings)
+
+    assert asset.original_duration_seconds is not None
+    assert 1.69 <= asset.original_duration_seconds <= 1.71
+    assert asset.duration_seconds is not None
+    assert 1.99 <= asset.duration_seconds <= 2.01
+    assert Path(asset.path).suffix == ".wav"
 
 
 def test_image_preview_is_embedded_thumbnail(settings: Settings) -> None:

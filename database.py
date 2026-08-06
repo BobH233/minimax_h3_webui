@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS assets (
     original_path TEXT,
     original_size_bytes INTEGER,
     duration_seconds REAL,
+    original_duration_seconds REAL,
     created_at REAL NOT NULL,
     deleted_at REAL
 );
@@ -130,6 +131,10 @@ class Database:
             if "original_size_bytes" not in asset_columns:
                 connection.execute(
                     "ALTER TABLE assets ADD COLUMN original_size_bytes INTEGER"
+                )
+            if "original_duration_seconds" not in asset_columns:
+                connection.execute(
+                    "ALTER TABLE assets ADD COLUMN original_duration_seconds REAL"
                 )
             job_columns = {
                 row[1] for row in connection.execute("PRAGMA table_info(jobs)")

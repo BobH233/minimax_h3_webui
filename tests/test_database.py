@@ -64,7 +64,11 @@ def test_existing_assets_table_gets_compression_columns(settings: Settings) -> N
         job_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(jobs)")
         }
-    assert {"original_path", "original_size_bytes"} <= asset_columns
+    assert {
+        "original_path",
+        "original_size_bytes",
+        "original_duration_seconds",
+    } <= asset_columns
     assert {"original_prompt", "backend_id"} <= job_columns
     with database.connect() as connection:
         controls = connection.execute(

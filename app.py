@@ -285,6 +285,7 @@ def _asset_payload(row: Any) -> dict[str, Any]:
         "compressed": compressed,
         "original_size_bytes": row["original_size_bytes"],
         "duration_seconds": row["duration_seconds"],
+        "original_duration_seconds": row["original_duration_seconds"],
         "created_at": row["created_at"],
         "content_url": f"/api/assets/{row['id']}/content?v={row['size_bytes']}",
         "thumbnail_url": (
@@ -305,6 +306,7 @@ def _row_asset(row: Any) -> MediaAsset:
         duration_seconds=row["duration_seconds"],
         original_path=row["original_path"],
         original_size_bytes=row["original_size_bytes"],
+        original_duration_seconds=row["original_duration_seconds"],
     )
 
 
@@ -739,8 +741,9 @@ async def upload_assets(
                     """
                     INSERT INTO assets(
                         id, user_id, kind, path, original_name, size_bytes,
-                        original_path, original_size_bytes, duration_seconds, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        original_path, original_size_bytes, duration_seconds,
+                        original_duration_seconds, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         asset.id,
@@ -752,6 +755,7 @@ async def upload_assets(
                         asset.original_path,
                         asset.original_size_bytes,
                         asset.duration_seconds,
+                        asset.original_duration_seconds,
                         now,
                     ),
                 )

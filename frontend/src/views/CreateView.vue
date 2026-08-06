@@ -11,7 +11,7 @@ import {
   IconTrash,
   IconUpload,
 } from "@tabler/icons-vue"
-import { api, auth, formatAssetSize, streamApi, type Asset, type GenerationConfig, type Job, type MediaKind, type PromptStreamEvent } from "../api"
+import { api, auth, formatAssetDuration, formatAssetSize, streamApi, type Asset, type GenerationConfig, type Job, type MediaKind, type PromptStreamEvent } from "../api"
 import AssetThumb from "../components/AssetThumb.vue"
 import AudioPreview from "../components/AudioPreview.vue"
 import MentionComposer from "../components/MentionComposer.vue"
@@ -266,7 +266,7 @@ onMounted(async () => {
         <div v-if="selectedWithMentions.length" class="selected-list">
           <div v-for="(asset, index) in selectedWithMentions" :key="asset.id" class="selected-row">
             <AssetThumb :asset="asset" compact />
-            <div class="selected-copy"><strong>{{ asset.mention }}</strong><span>{{ asset.original_name }}</span><span>{{ formatAssetSize(asset) }}</span></div>
+            <div class="selected-copy"><strong>{{ asset.mention }}</strong><span>{{ asset.original_name }}</span><span>{{ formatAssetSize(asset) }}<template v-if="asset.kind === 'audio'"> / {{ formatAssetDuration(asset) }}</template></span></div>
             <div class="row-actions">
               <AudioPreview v-if="asset.kind === 'audio'" :src="asset.content_url" compact />
               <button class="icon-button" type="button" aria-label="上移" :disabled="optimizing || index === 0" @click="moveAsset(index, -1)"><IconArrowUp :size="17" /></button>
@@ -288,7 +288,7 @@ onMounted(async () => {
             <button class="asset-choice-select" type="button" :disabled="optimizing" @click="toggleAsset(asset)">
               <AssetThumb :asset="asset" />
               <span class="asset-choice-name">{{ asset.original_name }}</span>
-              <span class="asset-choice-size">{{ formatAssetSize(asset) }}</span>
+              <span class="asset-choice-size">{{ formatAssetSize(asset) }}<template v-if="asset.kind === 'audio'"> / {{ formatAssetDuration(asset) }}</template></span>
               <span v-if="selectedIds.has(asset.id)" class="selected-check"><IconCheck :size="15" /></span>
             </button>
             <AudioPreview v-if="asset.kind === 'audio'" :src="asset.content_url" />

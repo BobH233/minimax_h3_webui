@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { IconArrowLeft, IconCopy, IconDownload, IconLinkOff, IconPlayerStop, IconRefresh, IconShare3 } from "@tabler/icons-vue"
-import { api, auth, formatAssetSize, formatDate, formatDuration, type Job } from "../api"
+import { api, auth, formatAssetDuration, formatAssetSize, formatDate, formatDuration, type Job } from "../api"
 import AssetThumb from "../components/AssetThumb.vue"
 import PromptText from "../components/PromptText.vue"
 import StatusBadge from "../components/StatusBadge.vue"
@@ -147,7 +147,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
         </section>
       </div>
 
-      <section class="detail-block"><h2>参考素材</h2><div class="detail-assets"><div v-for="asset in job.assets" :key="asset.id" class="detail-asset"><AssetThumb :asset="asset" /><strong>{{ asset.mention }}</strong><span>{{ asset.original_name }}</span><small>{{ formatAssetSize(asset) }}</small></div></div></section>
+      <section class="detail-block"><h2>参考素材</h2><div class="detail-assets"><div v-for="asset in job.assets" :key="asset.id" class="detail-asset"><AssetThumb :asset="asset" /><strong>{{ asset.mention }}</strong><span>{{ asset.original_name }}</span><small>{{ formatAssetSize(asset) }}<template v-if="asset.duration_seconds"> / {{ formatAssetDuration(asset) }}</template></small></div></div></section>
     </template>
   </div>
 </template>
