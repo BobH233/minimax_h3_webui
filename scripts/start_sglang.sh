@@ -16,6 +16,8 @@ fi
 : "${H3_GPU_IDS:=0,1,2,3}"
 : "${H3_API_HOST:=127.0.0.1}"
 : "${H3_API_PORT:=30011}"
+: "${H3_MASTER_PORT:=30005}"
+: "${H3_SCHEDULER_PORT:=5555}"
 : "${H3_HF_HOME:=/data/huggingface_home}"
 : "${H3_RUNTIME_ROOT:=/data/h3-runtime}"
 : "${H3_HOST_DATA_ROOT:=/data}"
@@ -23,6 +25,8 @@ fi
 
 H3_GPU_IDS="${H3_INSTANCE_GPU_IDS:-$H3_GPU_IDS}"
 H3_API_PORT="${H3_INSTANCE_API_PORT:-$H3_API_PORT}"
+H3_MASTER_PORT="${H3_INSTANCE_MASTER_PORT:-$H3_MASTER_PORT}"
+H3_SCHEDULER_PORT="${H3_INSTANCE_SCHEDULER_PORT:-$H3_SCHEDULER_PORT}"
 H3_RUNTIME_ROOT="${H3_INSTANCE_RUNTIME_ROOT:-$H3_RUNTIME_ROOT}"
 
 for path in "$H3_MODEL_PATH/model_index.json" "$H3_SGLANG_IMAGE" "$H3_CUDA_COMPAT/libcuda.so.1"; do
@@ -61,5 +65,7 @@ exec apptainer exec \
   --ulysses-degree 2 \
   --performance-mode speed \
   --strict-ports \
+  --master-port "$H3_MASTER_PORT" \
+  --scheduler-port "$H3_SCHEDULER_PORT" \
   --host "$H3_API_HOST" \
   --port "$H3_API_PORT"
