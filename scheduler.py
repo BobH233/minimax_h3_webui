@@ -16,6 +16,25 @@ from h3_client import H3APIError, H3Client
 LOGGER = logging.getLogger(__name__)
 
 
+def generation_progress(raw: dict[str, Any]) -> tuple[float | None, str]:
+    try:
+        progress = max(0.0, min(100.0, float(raw.get("progress"))))
+    except (TypeError, ValueError):
+        progress = None
+
+    stage = "正在生成"
+    try:
+        current_step = int(raw.get("current_step"))
+        total_steps = int(raw.get("total_steps"))
+    except (TypeError, ValueError):
+        current_step = total_steps = None
+    if current_step is not None and total_steps and 0 <= current_step <= total_steps:
+        stage = f"正在去噪 · {current_step}/{total_steps} 步"
+    if raw.get("generation_stage") == "postprocessing":
+        stage = "正在解码与保存"
+    return progress, stage
+
+
 class QueueWorker:
     def __init__(
         self,
@@ -169,11 +188,7 @@ class QueueWorker:
                 time.sleep(min(self.settings.poll_seconds * 2**min(failures, 4), 15))
                 continue
 
-            raw_progress = status.raw.get("progress")
-            try:
-                progress = max(0.0, min(100.0, float(raw_progress)))
-            except (TypeError, ValueError):
-                progress = None
+            progress, stage = generation_progress(status.raw)
 
             if status.status == "succeeded":
                 self._download(job_id, remote_id, job)
@@ -189,7 +204,7 @@ class QueueWorker:
             self._update(
                 job_id,
                 status="generating",
-                stage="正在生成",
+                stage=stage,
                 error=status.error,
                 progress=progress,
             )

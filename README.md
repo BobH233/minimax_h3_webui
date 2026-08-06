@@ -15,6 +15,7 @@
 - MiniMax-H3 提示词智能优化，支持 OpenAI 兼容接口和 SSE 流式回填
 - SQLite 多用户系统和管理员后台
 - 按用户权重排序的多实例并行任务队列
+- 可选的 MiniMax-H3 真实去噪步数与生成进度
 - 用户查看、取消自己的排队任务并永久下载结果
 - 管理员管理用户、查看总队列和 GPU 状态
 - 已完成视频生成公开分享链接
@@ -115,6 +116,36 @@ bash scripts/start_webui.sh
 ```bash
 bash scripts/start_sglang.sh
 ```
+
+### 真实去噪进度补丁
+
+当前 SGLang 的视频接口虽然包含 `progress`，但 MiniMax-H3 生成期间通常一直返回 `0`。本项目提供一个可选补丁，为 `/v1/videos/{id}` 增加：
+
+```json
+{
+  "status": "processing",
+  "progress": 51,
+  "generation_stage": "denoising",
+  "current_step": 25,
+  "total_steps": 49
+}
+```
+
+补丁适用于 SGLang commit `12eadf86f12aec2e6f81a6e38b61b964a4c6b529`。它通过独立的 Apptainer overlay 安装，不会修改原始 SIF 镜像：
+
+```bash
+bash scripts/install_sglang_progress_patch.sh
+```
+
+安装完成后重启 SGLang。`scripts/start_sglang.sh` 会自动加载 `.env` 中的 `H3_SGLANG_PROGRESS_OVERLAY`；主实例和第二实例可以共用同一个只读 overlay。
+
+验证任务生成期间的接口：
+
+```bash
+curl http://127.0.0.1:30011/v1/videos/任务ID
+```
+
+卸载时停止 SGLang，删除 `H3_SGLANG_PROGRESS_OVERLAY` 指向的 overlay 文件后重新启动即可。未安装补丁、字段缺失或 `progress` 为 `0` 时，WebUI 会自动使用历史任务耗时估算进度，功能不会中断。若 SGLang commit 不匹配，安装脚本会直接停止，不会尝试强行修改源码。
 
 单独启动第二个实例：
 

@@ -5,11 +5,43 @@ import time
 
 from config import Settings
 from database import Database
-from scheduler import QueueWorker
+from scheduler import QueueWorker, generation_progress
 
 
 class Client:
     pass
+
+
+def test_patched_sglang_progress_uses_real_steps() -> None:
+    progress, stage = generation_progress(
+        {
+            "progress": 51,
+            "current_step": 25,
+            "total_steps": 49,
+            "generation_stage": "denoising",
+        }
+    )
+    assert progress == 51
+    assert stage == "正在去噪 · 25/49 步"
+
+
+def test_unpatched_sglang_progress_falls_back_cleanly() -> None:
+    progress, stage = generation_progress({"progress": 0})
+    assert progress == 0
+    assert stage == "正在生成"
+
+
+def test_patched_sglang_reports_postprocessing() -> None:
+    progress, stage = generation_progress(
+        {
+            "progress": 95,
+            "current_step": 49,
+            "total_steps": 49,
+            "generation_stage": "postprocessing",
+        }
+    )
+    assert progress == 95
+    assert stage == "正在解码与保存"
 
 
 def test_worker_claims_current_highest_weight(settings: Settings) -> None:

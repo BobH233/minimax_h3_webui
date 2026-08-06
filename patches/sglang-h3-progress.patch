@@ -1,0 +1,235 @@
+diff --git a/python/sglang/multimodal_gen/runtime/entrypoints/openai/protocol.py b/python/sglang/multimodal_gen/runtime/entrypoints/openai/protocol.py
+index 80dc67b..e33d913 100644
+--- a/python/sglang/multimodal_gen/runtime/entrypoints/openai/protocol.py
++++ b/python/sglang/multimodal_gen/runtime/entrypoints/openai/protocol.py
+@@ -72,6 +72,9 @@ class VideoResponse(BaseModel):
+     model: str = "sora-2"
+     status: str = "queued"
+     progress: int = 0
++    generation_stage: Optional[str] = None
++    current_step: Optional[int] = None
++    total_steps: Optional[int] = None
+     created_at: int = Field(default_factory=lambda: int(time.time()))
+     size: str = ""
+     seconds: str = "4"
+diff --git a/python/sglang/multimodal_gen/runtime/entrypoints/openai/video_api.py b/python/sglang/multimodal_gen/runtime/entrypoints/openai/video_api.py
+index c8cbf80..7823c98 100644
+--- a/python/sglang/multimodal_gen/runtime/entrypoints/openai/video_api.py
++++ b/python/sglang/multimodal_gen/runtime/entrypoints/openai/video_api.py
+@@ -1,6 +1,7 @@
+ # Copied and adapted from: https://github.com/hao-ai-lab/FastVideo
+ 
+ import asyncio
++import hashlib
+ import json
+ import os
+ import shutil
+@@ -58,6 +59,87 @@ _VIDEO_EXTENSIONS = {
+     ".webm",
+ }
+ 
++_PROGRESS_STAGES = {"denoising", "postprocessing"}
++
++
++def _progress_path(video_id: str) -> str | None:
++    progress_dir = os.environ.get("SGLANG_VIDEO_PROGRESS_DIR")
++    if not progress_dir:
++        return None
++    filename = hashlib.sha256(video_id.encode("utf-8")).hexdigest() + ".progress"
++    return os.path.join(progress_dir, filename)
++
++
++def _read_live_progress(video_id: str) -> dict[str, Any]:
++    progress_dir = os.environ.get("SGLANG_VIDEO_PROGRESS_DIR")
++    if not progress_dir:
++        return {}
++    try:
++        paths = [
++            entry.path
++            for entry in os.scandir(progress_dir)
++            if entry.name.endswith(".progress")
++        ]
++    except OSError:
++        return {}
++    for path in paths:
++        try:
++            with open(path, encoding="utf-8") as progress_file:
++                reported_id, stage, current_text, total_text = (
++                    progress_file.read().split()
++                )
++            current_step = int(current_text)
++            total_steps = int(total_text)
++        except (OSError, TypeError, ValueError):
++            continue
++        if reported_id != video_id and not reported_id.startswith(video_id + "_"):
++            continue
++        if (
++            stage not in _PROGRESS_STAGES
++            or total_steps <= 0
++            or current_step < 0
++            or current_step > total_steps
++        ):
++            continue
++        progress = min(95, round(5 + 90 * current_step / total_steps))
++        return {
++            "status": "processing",
++            "progress": progress,
++            "generation_stage": stage,
++            "current_step": current_step,
++            "total_steps": total_steps,
++        }
++    return {}
++
++
++def _video_job_with_progress(job: dict[str, Any]) -> dict[str, Any]:
++    result = dict(job)
++    if result.get("status") not in {"completed", "failed", "deleted"}:
++        result.update(_read_live_progress(str(result["id"])))
++    return result
++
++
++def _remove_progress(video_id: str) -> None:
++    progress_dir = os.environ.get("SGLANG_VIDEO_PROGRESS_DIR")
++    if not progress_dir:
++        return
++    try:
++        paths = [
++            entry.path
++            for entry in os.scandir(progress_dir)
++            if entry.name.endswith(".progress")
++        ]
++    except OSError:
++        return
++    for path in paths:
++        try:
++            with open(path, encoding="utf-8") as progress_file:
++                reported_id = progress_file.read().split(maxsplit=1)[0]
++            if reported_id == video_id or reported_id.startswith(video_id + "_"):
++                os.remove(path)
++        except (FileNotFoundError, IndexError, OSError):
++            continue
++
+ 
+ def _extra_value(request: VideoGenerationsRequest, name: str) -> Any:
+     return (request.model_extra or {}).get(name)
+@@ -510,7 +592,8 @@ async def _dispatch_job_async(
+                 exc_info=True,
+             )
+         for td in temp_dirs or []:
+             shutil.rmtree(td, ignore_errors=True)
++        _remove_progress(job_id)
+ 
+ 
+ # TODO: support image to video generation
+@@ -860,7 +943,7 @@ async def list_videos(
+ 
+     if limit is not None:
+         jobs = jobs[:limit]
+-    items = [VideoResponse(**j) for j in jobs]
++    items = [VideoResponse(**_video_job_with_progress(j)) for j in jobs]
+     return VideoListResponse(data=items)
+ 
+ 
+@@ -869,7 +952,7 @@ async def retrieve_video(video_id: str = Path(...)):
+     job = await VIDEO_STORE.get(video_id)
+     if not job:
+         raise HTTPException(status_code=404, detail="Video not found")
+-    return VideoResponse(**job)
++    return VideoResponse(**_video_job_with_progress(job))
+ 
+ 
+ # TODO: support aborting a job.
+@@ -879,6 +962,7 @@ async def delete_video(video_id: str = Path(...)):
+         raise HTTPException(status_code=404, detail="Video not found")
+     # Mark as deleted in response semantics
+     job["status"] = "deleted"
++    _remove_progress(video_id)
+     return VideoResponse(**job)
+ 
+ 
+diff --git a/python/sglang/multimodal_gen/runtime/pipelines_core/stages/model_specific_stages/minimax_h3/stages/denoising.py b/python/sglang/multimodal_gen/runtime/pipelines_core/stages/model_specific_stages/minimax_h3/stages/denoising.py
+index 5d74dc6..fc15e92 100644
+--- a/python/sglang/multimodal_gen/runtime/pipelines_core/stages/model_specific_stages/minimax_h3/stages/denoising.py
++++ b/python/sglang/multimodal_gen/runtime/pipelines_core/stages/model_specific_stages/minimax_h3/stages/denoising.py
+@@ -5,3 +5,6 @@ single-branch execution, and payload validation.
+ from __future__ import annotations
+ 
++import hashlib
++import os
++
+ from collections.abc import Mapping
+@@ -45,7 +48,41 @@ logger = init_logger(__name__)
+ _REF2VA_VIDEO_CHAINS = {
+     "video.reference_preserve",
+     "video_audio.reference_preserve",
+ }
++_PROGRESS_STAGES = {"denoising", "postprocessing"}
++
++
++def _report_video_progress(
++    batch: Req, stage: str, current_step: int, total_steps: int
++) -> None:
++    progress_dir = os.environ.get("SGLANG_VIDEO_PROGRESS_DIR")
++    if not progress_dir or stage not in _PROGRESS_STAGES:
++        return
++    request_id = batch.extra.get("parent_request_id") or batch.request_id
++    if not request_id:
++        output_file_name = getattr(batch, "output_file_name", None)
++        request_id = os.path.splitext(
++            os.path.basename(str(output_file_name or ""))
++        )[0]
++    if not request_id:
++        return
++    request_id = str(request_id)
++    filename = hashlib.sha256(request_id.encode("utf-8")).hexdigest()
++    path = os.path.join(progress_dir, filename + ".progress")
++    temporary_path = f"{path}.{os.getpid()}.tmp"
++    try:
++        os.makedirs(progress_dir, exist_ok=True)
++        with open(temporary_path, "w", encoding="utf-8") as progress_file:
++            progress_file.write(
++                f"{request_id} {stage} {current_step} {total_steps}\n"
++            )
++        os.replace(temporary_path, path)
++    except OSError:
++        try:
++            os.remove(temporary_path)
++        except OSError:
++            pass
++        logger.debug("Failed to report video progress", exc_info=True)
+ 
+ 
+ def minimax_h3_condition_noise_aug(sampling: Any) -> tuple[float, float]:
+@@ -574,6 +611,9 @@ class MiniMaxH3DenoisingStage(DenoisingStage):
+                 device=device,
+             )
+             initial_video, initial_audio = _expand_initial_rows(ctx, positive)
++            total_steps = len(sigmas_video) - 1
++            completed_steps = 0
++            _report_video_progress(batch, "denoising", 0, total_steps)
+             with (
+                 maybe_nvtx_range("denoising_loop", self.current_use_nvtx),
+                 self.progress_bar(
+@@ -584,7 +624,12 @@ class MiniMaxH3DenoisingStage(DenoisingStage):
+             ):
+ 
+                 def on_step(_step, _video_rows, _audio_rows):
++                    nonlocal completed_steps
++                    completed_steps += 1
+                     progress_bar.update()
++                    _report_video_progress(
++                        batch, "denoising", completed_steps, total_steps
++                    )
+                     if not batch.is_warmup:
+                         self.step_profile()
+ 
+@@ -609,6 +654,9 @@ class MiniMaxH3DenoisingStage(DenoisingStage):
+                         batch=batch,
+                     ),
+                 )
++            _report_video_progress(
++                batch, "postprocessing", completed_steps, total_steps
++            )
+         finally:
+             self._finish_active_component_use()
+         _publish_full_loop_outputs(

@@ -23,11 +23,13 @@ fi
 : "${H3_HOST_DATA_ROOT:=/data}"
 : "${H3_HTTP_PROXY:=http://127.0.0.1:8897}"
 
+H3_SHARED_RUNTIME_ROOT="$H3_RUNTIME_ROOT"
 H3_GPU_IDS="${H3_INSTANCE_GPU_IDS:-$H3_GPU_IDS}"
 H3_API_PORT="${H3_INSTANCE_API_PORT:-$H3_API_PORT}"
 H3_MASTER_PORT="${H3_INSTANCE_MASTER_PORT:-$H3_MASTER_PORT}"
 H3_SCHEDULER_PORT="${H3_INSTANCE_SCHEDULER_PORT:-$H3_SCHEDULER_PORT}"
 H3_RUNTIME_ROOT="${H3_INSTANCE_RUNTIME_ROOT:-$H3_RUNTIME_ROOT}"
+: "${H3_SGLANG_PROGRESS_OVERLAY:=$H3_SHARED_RUNTIME_ROOT/sglang-progress-overlay.img}"
 
 for path in "$H3_MODEL_PATH/model_index.json" "$H3_SGLANG_IMAGE" "$H3_CUDA_COMPAT/libcuda.so.1"; do
   if [[ ! -e "$path" ]]; then
@@ -36,7 +38,7 @@ for path in "$H3_MODEL_PATH/model_index.json" "$H3_SGLANG_IMAGE" "$H3_CUDA_COMPA
   fi
 done
 
-mkdir -p "$H3_RUNTIME_ROOT/tmp" "$H3_RUNTIME_ROOT/cache"
+mkdir -p "$H3_RUNTIME_ROOT/tmp" "$H3_RUNTIME_ROOT/cache" "$H3_RUNTIME_ROOT/progress"
 
 export APPTAINERENV_CUDA_VISIBLE_DEVICES="$H3_GPU_IDS"
 export APPTAINERENV_LD_LIBRARY_PATH="/cuda-compat:/.singularity.d/libs:/usr/local/cuda/lib64"
@@ -51,10 +53,17 @@ export APPTAINERENV_PYTHONUNBUFFERED=1
 export APPTAINERENV_NCCL_NVLS_ENABLE=0
 export APPTAINERENV_PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export APPTAINERENV_SGLANG_USE_RUNAI_MODEL_STREAMER=0
+export APPTAINERENV_SGLANG_VIDEO_PROGRESS_DIR="$H3_RUNTIME_ROOT/progress"
+
+overlay_args=()
+if [[ -f "$H3_SGLANG_PROGRESS_OVERLAY" ]]; then
+  overlay_args=(--overlay "$H3_SGLANG_PROGRESS_OVERLAY:ro")
+fi
 
 exec apptainer exec \
   --cleanenv \
   --nv \
+  "${overlay_args[@]}" \
   --bind "$H3_HOST_DATA_ROOT:$H3_HOST_DATA_ROOT" \
   --bind "$H3_CUDA_COMPAT:/cuda-compat:ro" \
   "$H3_SGLANG_IMAGE" \
