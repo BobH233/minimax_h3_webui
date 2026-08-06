@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { IconArrowLeft, IconCopy, IconDownload, IconLinkOff, IconPlayerStop, IconShare3 } from "@tabler/icons-vue"
-import { api, formatAssetSize, formatDate, formatDuration, type Job } from "../api"
+import { IconArrowLeft, IconCopy, IconDownload, IconLinkOff, IconPlayerStop, IconRefresh, IconShare3 } from "@tabler/icons-vue"
+import { api, auth, formatAssetSize, formatDate, formatDuration, type Job } from "../api"
 import AssetThumb from "../components/AssetThumb.vue"
 import PromptText from "../components/PromptText.vue"
 import StatusBadge from "../components/StatusBadge.vue"
@@ -17,12 +17,19 @@ const copied = ref(false)
 let timer = 0
 
 const active = computed(() => job.value && ["queued", "submitting", "generating"].includes(job.value.status))
+const canReuse = computed(() => Boolean(
+  job.value?.original_prompt && (!job.value.user || job.value.user.id === auth.user?.id),
+))
 
 function goBack(): void {
   const previous = window.history.state?.back
   const path = typeof previous === "string" ? previous.split(/[?#]/u)[0] : ""
   if (path === "/jobs" || path === "/admin/queue") router.back()
   else void router.push(job.value?.user ? "/admin/queue" : "/jobs")
+}
+
+function reuse(): void {
+  if (job.value) void router.push({ path: "/create", query: { from_job: job.value.id } })
 }
 
 async function load(): Promise<void> {
@@ -99,6 +106,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
       <header class="detail-header">
         <div class="detail-title"><StatusBadge :status="job.status" /><h1>{{ job.stage }}</h1><p v-if="job.user">{{ job.user.username }}，权重 {{ job.user.weight }}</p></div>
         <div class="header-actions">
+          <button v-if="canReuse" class="secondary-button" type="button" @click="reuse"><IconRefresh :size="18" />一键重新生成</button>
           <button v-if="job.status === 'queued'" class="secondary-button danger-button" type="button" :disabled="cancelling" @click="cancel"><IconPlayerStop :size="18" />取消排队</button>
           <button v-if="job.status === 'succeeded' && !job.share_url" class="secondary-button" type="button" :disabled="sharing" @click="share"><IconShare3 :size="18" />公开分享</button>
           <button v-if="job.share_url" class="secondary-button" type="button" :disabled="sharing" @click="copyShare"><IconCopy :size="18" />{{ copied ? "已复制" : "复制分享链接" }}</button>

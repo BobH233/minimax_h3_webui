@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
-import { useRouter } from "vue-router"
+import { useRoute, useRouter } from "vue-router"
 import {
   IconArrowDown,
   IconArrowUp,
@@ -11,11 +11,12 @@ import {
   IconTrash,
   IconUpload,
 } from "@tabler/icons-vue"
-import { api, formatAssetSize, streamApi, type Asset, type GenerationConfig, type Job, type MediaKind, type PromptStreamEvent } from "../api"
+import { api, auth, formatAssetSize, streamApi, type Asset, type GenerationConfig, type Job, type MediaKind, type PromptStreamEvent } from "../api"
 import AssetThumb from "../components/AssetThumb.vue"
 import AudioPreview from "../components/AudioPreview.vue"
 import MentionComposer from "../components/MentionComposer.vue"
 
+const route = useRoute()
 const router = useRouter()
 const assets = ref<Asset[]>([])
 const selected = ref<Asset[]>([])
@@ -214,6 +215,18 @@ onMounted(async () => {
     steps.value = config.value.defaults.num_inference_steps
     flowShift.value = config.value.defaults.flow_shift
     audioFlowShift.value = config.value.defaults.audio_flow_shift
+    const sourceId = typeof route.query.from_job === "string" ? route.query.from_job : ""
+    if (sourceId) {
+      const source = await api<Job>(`/api/jobs/${sourceId}`)
+      if (!source.original_prompt || (source.user && source.user.id !== auth.user?.id)) {
+        throw new Error("该任务不可重新生成")
+      }
+      const byId = new Map(assets.value.map((asset) => [asset.id, asset]))
+      const restored = source.assets.map((asset) => byId.get(asset.id)).filter((asset): asset is Asset => Boolean(asset))
+      if (restored.length !== source.assets.length) throw new Error("部分参考素材已不可用")
+      prompt.value = source.original_prompt
+      selected.value = restored
+    }
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : "加载失败"
   }
