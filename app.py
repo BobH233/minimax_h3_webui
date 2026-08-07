@@ -933,17 +933,6 @@ def get_job(
         ).fetchone()
         if row is None or (row["user_id"] != session["id"] and not session["is_admin"]):
             raise HTTPException(status_code=404, detail="任务不存在")
-        if (
-            row["user_id"] == session["id"]
-            and row["status"] == "succeeded"
-            and row["viewed_at"] is None
-        ):
-            connection.execute(
-                "UPDATE jobs SET viewed_at = ? WHERE id = ?", (time.time(), job_id)
-            )
-            row = connection.execute(
-                "SELECT * FROM jobs WHERE id = ?", (job_id,)
-            ).fetchone()
         if session["is_admin"]:
             row = connection.execute(
                 """
@@ -955,6 +944,31 @@ def get_job(
         value = _job_payload(connection, row, bool(session["is_admin"]))
         value["share_url"] = _share_url(connection, job_id)
         return value
+
+
+@app.post("/api/jobs/{job_id}/viewed")
+def mark_job_viewed(
+    job_id: str, session: dict[str, Any] = Depends(csrf_session)
+) -> dict[str, bool]:
+    with database.connect() as connection:
+        changed = connection.execute(
+            """
+            UPDATE jobs SET viewed_at = COALESCE(viewed_at, ?)
+            WHERE id = ? AND user_id = ? AND status = 'succeeded'
+              AND deleted_at IS NULL
+            """,
+            (time.time(), job_id, session["id"]),
+        ).rowcount
+        if not changed:
+            row = connection.execute(
+                "SELECT status FROM jobs WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+                (job_id, session["id"]),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="任务不存在")
+            if row["status"] != "succeeded":
+                raise HTTPException(status_code=409, detail="任务尚未生成完成")
+    return {"unread": False}
 
 
 @app.post("/api/jobs/{job_id}/cancel")

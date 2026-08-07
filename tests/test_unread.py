@@ -32,7 +32,7 @@ def _insert_job(database: Database, job_id: str, user_id: str, status: str) -> N
         )
 
 
-def test_completed_job_becomes_read_only_when_owner_opens_it(
+def test_completed_job_is_marked_read_explicitly(
     settings: Settings, monkeypatch
 ) -> None:
     monkeypatch.setenv("H3_DATA_ROOT", str(settings.data_root))
@@ -51,7 +51,9 @@ def test_completed_job_becomes_read_only_when_owner_opens_it(
         assert app._job_payload(connection, row)["unread"] is True
 
     owner_result = app.get_job("owner-job", {"id": "owner", "is_admin": False})
-    assert owner_result["unread"] is False
+    assert owner_result["unread"] is True
+
+    app.mark_job_viewed("owner-job", {"id": "owner", "is_admin": False})
 
     admin_result = app.get_job("admin-job", {"id": "admin", "is_admin": True})
     assert admin_result["unread"] is False
@@ -61,4 +63,30 @@ def test_completed_job_becomes_read_only_when_owner_opens_it(
         ).fetchone()[0] is not None
         assert connection.execute(
             "SELECT viewed_at FROM jobs WHERE id = 'admin-job'"
+        ).fetchone()[0] is None
+
+
+def test_progress_poll_does_not_consume_unread_state(
+    settings: Settings, monkeypatch
+) -> None:
+    monkeypatch.setenv("H3_DATA_ROOT", str(settings.data_root))
+    import app
+
+    database = Database(settings.database_path)
+    database.initialize()
+    _insert_job(database, "job", "owner", "generating")
+    monkeypatch.setattr(app, "database", database)
+
+    app.get_job("job", {"id": "owner", "is_admin": False})
+    with database.connect() as connection:
+        connection.execute(
+            "UPDATE jobs SET status = 'succeeded', completed_at = ?, stage = '生成完成' WHERE id = 'job'",
+            (time.time(),),
+        )
+
+    result = app.get_job("job", {"id": "owner", "is_admin": False})
+    assert result["unread"] is True
+    with database.connect() as connection:
+        assert connection.execute(
+            "SELECT viewed_at FROM jobs WHERE id = 'job'"
         ).fetchone()[0] is None

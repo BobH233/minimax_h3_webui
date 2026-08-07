@@ -15,6 +15,8 @@ const cancelling = ref(false)
 const sharing = ref(false)
 const copied = ref(false)
 let timer = 0
+let mounted = false
+let markingViewed = false
 
 const active = computed(() => job.value && ["queued", "submitting", "generating"].includes(job.value.status))
 const canReuse = computed(() => Boolean(
@@ -34,10 +36,22 @@ function reuse(): void {
 
 async function load(): Promise<void> {
   try {
-    job.value = await api<Job>(`/api/jobs/${route.params.id}`)
+    const loaded = await api<Job>(`/api/jobs/${route.params.id}`)
+    if (!mounted) return
+    job.value = loaded
     error.value = ""
+    if (loaded.status === "succeeded" && loaded.unread && !document.hidden && !markingViewed) {
+      markingViewed = true
+      try {
+        await api(`/api/jobs/${loaded.id}/viewed`, { method: "POST" })
+        if (mounted && job.value?.id === loaded.id) job.value.unread = false
+      } finally {
+        markingViewed = false
+      }
+    }
     if (!active.value) window.clearInterval(timer)
   } catch (caught) {
+    if (!mounted) return
     error.value = caught instanceof Error ? caught.message : "加载失败"
   }
 }
@@ -91,10 +105,14 @@ async function unshare(): Promise<void> {
 }
 
 onMounted(() => {
+  mounted = true
   void load()
   timer = window.setInterval(() => void load(), 2500)
 })
-onBeforeUnmount(() => window.clearInterval(timer))
+onBeforeUnmount(() => {
+  mounted = false
+  window.clearInterval(timer)
+})
 </script>
 
 <template>
