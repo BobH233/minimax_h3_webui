@@ -169,7 +169,7 @@ async function optimizePrompt(): Promise<void> {
       },
     )
     if (!completed) throw new Error("提示词优化响应未完成")
-    if (originalPrompt.value === null) originalPrompt.value = original.trim()
+    originalPrompt.value = original.trim()
   } catch (caught) {
     prompt.value = original
     optimizeError.value = caught instanceof Error ? caught.message : "提示词优化失败"
