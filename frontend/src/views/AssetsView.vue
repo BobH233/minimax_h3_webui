@@ -65,7 +65,7 @@ onMounted(async () => {
     <div v-if="loading" class="asset-grid"><div v-for="item in 8" :key="item" class="asset-skeleton" /></div>
     <div v-else-if="visible.length" class="asset-grid">
       <article v-for="asset in visible" :key="asset.id" class="asset-card">
-        <AssetThumb :asset="asset" />
+        <AssetThumb :asset="asset" video-preview />
         <AudioPreview v-if="asset.kind === 'audio'" :src="asset.content_url" />
         <div class="asset-card-copy"><strong>{{ asset.original_name }}</strong><span>{{ formatAssetSize(asset) }}<template v-if="asset.duration_seconds"> / {{ formatAssetDuration(asset) }}</template></span><time>{{ formatDate(asset.created_at) }}</time></div>
       </article>
