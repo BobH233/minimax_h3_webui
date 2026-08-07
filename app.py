@@ -942,6 +942,10 @@ def get_job(
                 (job_id,),
             ).fetchone()
         value = _job_payload(connection, row, bool(session["is_admin"]))
+        if row["user_id"] == session["id"]:
+            value["unread"] = bool(
+                row["status"] == "succeeded" and row["viewed_at"] is None
+            )
         value["share_url"] = _share_url(connection, job_id)
         return value
 

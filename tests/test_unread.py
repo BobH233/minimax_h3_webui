@@ -42,6 +42,7 @@ def test_completed_job_is_marked_read_explicitly(
     database.initialize()
     _insert_job(database, "owner-job", "owner", "succeeded")
     _insert_job(database, "admin-job", "other", "succeeded")
+    _insert_job(database, "admin-owner-job", "admin", "succeeded")
     monkeypatch.setattr(app, "database", database)
 
     with database.connect() as connection:
@@ -57,6 +58,10 @@ def test_completed_job_is_marked_read_explicitly(
 
     admin_result = app.get_job("admin-job", {"id": "admin", "is_admin": True})
     assert admin_result["unread"] is False
+    admin_owner_result = app.get_job(
+        "admin-owner-job", {"id": "admin", "is_admin": True}
+    )
+    assert admin_owner_result["unread"] is True
     with database.connect() as connection:
         assert connection.execute(
             "SELECT viewed_at FROM jobs WHERE id = 'owner-job'"
