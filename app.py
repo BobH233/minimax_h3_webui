@@ -1023,13 +1023,10 @@ def share_job(
 ) -> dict[str, str]:
     with database.connect() as connection:
         row = connection.execute(
-            """
-            SELECT * FROM jobs WHERE id = ? AND user_id = ?
-              AND deleted_at IS NULL
-            """,
-            (job_id, session["id"]),
+            "SELECT * FROM jobs WHERE id = ? AND deleted_at IS NULL",
+            (job_id,),
         ).fetchone()
-        if row is None:
+        if row is None or (row["user_id"] != session["id"] and not session["is_admin"]):
             raise HTTPException(status_code=404, detail="任务不存在")
         if row["status"] != "succeeded" or not row["output_path"]:
             raise HTTPException(status_code=409, detail="只能分享已生成的视频")
@@ -1050,11 +1047,11 @@ def unshare_job(
     job_id: str, session: dict[str, Any] = Depends(csrf_session)
 ) -> dict[str, bool]:
     with database.connect() as connection:
-        owned = connection.execute(
-            "SELECT 1 FROM jobs WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
-            (job_id, session["id"]),
+        row = connection.execute(
+            "SELECT user_id FROM jobs WHERE id = ? AND deleted_at IS NULL",
+            (job_id,),
         ).fetchone()
-        if owned is None:
+        if row is None or (row["user_id"] != session["id"] and not session["is_admin"]):
             raise HTTPException(status_code=404, detail="任务不存在")
         connection.execute("DELETE FROM job_shares WHERE job_id = ?", (job_id,))
     return {"ok": True}
