@@ -13,6 +13,7 @@ defineProps<{ job: Job }>()
     <div class="job-row-main">
       <div class="job-row-top">
         <StatusBadge :status="job.status" />
+        <span v-if="job.unread" class="status-badge unread-badge">未读</span>
         <span v-if="job.user" class="job-user">{{ job.user.username }}</span>
         <span v-if="job.user" class="weight-chip">{{ job.user.weight }}</span>
         <span class="job-time">{{ formatDate(job.created_at) }}</span>

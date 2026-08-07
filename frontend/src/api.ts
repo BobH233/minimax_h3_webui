@@ -36,6 +36,7 @@ export interface Job {
   prompt: string
   original_prompt: string | null
   status: JobStatus
+  unread: boolean
   stage: string
   error: string | null
   progress: number

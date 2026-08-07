@@ -238,10 +238,13 @@ summary { padding: 13px 0; color: var(--muted); font-size: 12px; font-weight: 65
 .status-queued { background: var(--surface-2); color: var(--muted); }
 .status-submitting, .status-generating { background: var(--accent-soft); color: var(--accent); }
 .status-succeeded { background: #e2f0e4; color: #27713a; }
+.unread-badge { background: #fff0d8; color: #b95000; }
 .status-failed { background: var(--danger-soft); color: var(--danger); }
 .status-cancelled { background: var(--surface-2); color: var(--muted); text-decoration: line-through; }
 :root[data-theme="dark"] .status-succeeded { background: #203b27; color: #7fd293; }
+:root[data-theme="dark"] .unread-badge { background: #4a2d16; color: #ffb36b; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .status-succeeded { background: #203b27; color: #7fd293; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .unread-badge { background: #4a2d16; color: #ffb36b; } }
 .empty-state { display: grid; min-height: 330px; place-items: center; align-content: center; gap: 10px; color: var(--muted); text-align: center; }
 .empty-state h2 { color: var(--text); font-size: 16px; }
 .empty-state a, .empty-state button { border: 0; background: transparent; color: var(--accent); font-weight: 650; cursor: pointer; }

@@ -466,6 +466,11 @@ def _job_payload(connection: Any, row: Any, include_user: bool = False) -> dict[
         "prompt": row["prompt"],
         "original_prompt": row["original_prompt"],
         "status": row["status"],
+        "unread": bool(
+            not include_user
+            and row["status"] == "succeeded"
+            and row["viewed_at"] is None
+        ),
         "stage": row["stage"],
         "error": row["error"],
         "progress": round(progress, 1),
@@ -928,6 +933,17 @@ def get_job(
         ).fetchone()
         if row is None or (row["user_id"] != session["id"] and not session["is_admin"]):
             raise HTTPException(status_code=404, detail="任务不存在")
+        if (
+            row["user_id"] == session["id"]
+            and row["status"] == "succeeded"
+            and row["viewed_at"] is None
+        ):
+            connection.execute(
+                "UPDATE jobs SET viewed_at = ? WHERE id = ?", (time.time(), job_id)
+            )
+            row = connection.execute(
+                "SELECT * FROM jobs WHERE id = ?", (job_id,)
+            ).fetchone()
         if session["is_admin"]:
             row = connection.execute(
                 """

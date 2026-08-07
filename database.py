@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     started_at REAL,
     completed_at REAL,
     generation_seconds REAL,
+    viewed_at REAL,
     deleted_at REAL
 );
 
@@ -143,6 +144,14 @@ class Database:
                 connection.execute("ALTER TABLE jobs ADD COLUMN original_prompt TEXT")
             if "backend_id" not in job_columns:
                 connection.execute("ALTER TABLE jobs ADD COLUMN backend_id TEXT")
+            if "viewed_at" not in job_columns:
+                connection.execute("ALTER TABLE jobs ADD COLUMN viewed_at REAL")
+                connection.execute(
+                    """
+                    UPDATE jobs SET viewed_at = COALESCE(completed_at, updated_at)
+                    WHERE status = 'succeeded'
+                    """
+                )
             connection.execute("DROP INDEX IF EXISTS idx_jobs_remote_id")
             connection.execute(
                 """

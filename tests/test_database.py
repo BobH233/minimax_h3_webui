@@ -69,7 +69,7 @@ def test_existing_assets_table_gets_compression_columns(settings: Settings) -> N
         "original_size_bytes",
         "original_duration_seconds",
     } <= asset_columns
-    assert {"original_prompt", "backend_id"} <= job_columns
+    assert {"original_prompt", "backend_id", "viewed_at"} <= job_columns
     with database.connect() as connection:
         controls = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'backend_controls'"
