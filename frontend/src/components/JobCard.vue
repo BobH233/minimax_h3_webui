@@ -29,7 +29,7 @@ defineProps<{ job: Job }>()
       </div>
     </div>
     <div class="job-assets">
-      <AssetThumb v-for="asset in job.assets.slice(0, 4)" :key="asset.id" :asset="asset" compact />
+      <AssetThumb v-for="asset in job.assets.slice(0, 4)" :key="asset.id" :asset="asset" compact video-preview />
       <span v-if="job.assets.length > 4" class="asset-overflow">+{{ job.assets.length - 4 }}</span>
     </div>
     <IconArrowRight class="row-arrow" :size="20" />

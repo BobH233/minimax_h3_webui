@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { nextTick, ref } from "vue"
-import { IconX } from "@tabler/icons-vue"
+import { IconMaximize, IconX } from "@tabler/icons-vue"
 
-const props = withDefaults(defineProps<{ src: string; thumbnailSrc?: string | null; alt: string }>(), { thumbnailSrc: "" })
+const props = withDefaults(defineProps<{
+  src: string
+  thumbnailSrc?: string | null
+  alt: string
+  inlineControls?: boolean
+  triggerClass?: string
+}>(), { thumbnailSrc: "", inlineControls: false, triggerClass: "" })
 const dialog = ref<HTMLDialogElement | null>(null)
 const player = ref<HTMLVideoElement | null>(null)
 const visible = ref(false)
@@ -14,6 +20,12 @@ async function open(event: Event): Promise<void> {
   await nextTick()
   dialog.value?.showModal()
   void player.value?.play()
+}
+
+function openInline(event: MouseEvent): void {
+  const video = event.currentTarget as HTMLVideoElement
+  if (event.offsetY >= video.clientHeight - 48) return
+  void open(event)
 }
 
 function close(): void {
@@ -33,7 +45,11 @@ function closed(): void {
 
 <template>
   <img v-if="thumbnailSrc" class="video-preview-trigger" :src="thumbnailSrc" :alt="alt" loading="lazy" decoding="async" fetchpriority="low" @click="open" />
-  <video v-else class="video-preview-trigger" :src="src" muted preload="metadata" @click="open" />
+  <div v-else-if="inlineControls" class="video-preview-inline">
+    <video :class="['video-preview-trigger', triggerClass]" :src="src" controls preload="metadata" @click="openInline" />
+    <button class="video-preview-expand" type="button" aria-label="放大视频" @click="open"><IconMaximize :size="18" /></button>
+  </div>
+  <video v-else :class="['video-preview-trigger', triggerClass]" :src="src" muted preload="metadata" @click="open" />
   <Teleport to="body">
     <dialog v-if="visible" ref="dialog" class="image-preview-dialog" :aria-label="alt" @click="closeBackdrop" @close="closed">
       <button class="image-preview-close" type="button" aria-label="关闭视频预览" @click="close"><IconX :size="22" /></button>

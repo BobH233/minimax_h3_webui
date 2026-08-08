@@ -6,6 +6,7 @@ import { api, auth, formatAssetDuration, formatAssetSize, formatDate, formatDura
 import AssetThumb from "../components/AssetThumb.vue"
 import PromptText from "../components/PromptText.vue"
 import StatusBadge from "../components/StatusBadge.vue"
+import VideoPreview from "../components/VideoPreview.vue"
 
 const route = useRoute()
 const router = useRouter()
@@ -140,7 +141,7 @@ onBeforeUnmount(() => {
         <span v-if="job.progress_is_estimate" class="muted-text">进度为预计值</span>
       </section>
 
-      <video v-if="job.status === 'succeeded' && job.download_url" class="result-video" :src="job.download_url" controls preload="metadata" />
+      <VideoPreview v-if="job.status === 'succeeded' && job.download_url" :src="job.download_url" alt="生成视频" trigger-class="result-video" inline-controls />
       <p v-if="job.error" class="error-panel">{{ job.error }}</p>
 
       <div class="detail-grid">
@@ -165,7 +166,7 @@ onBeforeUnmount(() => {
         </section>
       </div>
 
-      <section class="detail-block"><h2>参考素材</h2><div class="detail-assets"><div v-for="asset in job.assets" :key="asset.id" class="detail-asset"><AssetThumb :asset="asset" /><strong>{{ asset.mention }}</strong><span>{{ asset.original_name }}</span><small>{{ formatAssetSize(asset) }}<template v-if="asset.duration_seconds"> / {{ formatAssetDuration(asset) }}</template></small></div></div></section>
+      <section class="detail-block"><h2>参考素材</h2><div class="detail-assets"><div v-for="asset in job.assets" :key="asset.id" class="detail-asset"><AssetThumb :asset="asset" video-preview /><strong>{{ asset.mention }}</strong><span>{{ asset.original_name }}</span><small>{{ formatAssetSize(asset) }}<template v-if="asset.duration_seconds"> / {{ formatAssetDuration(asset) }}</template></small></div></div></section>
     </template>
   </div>
 </template>

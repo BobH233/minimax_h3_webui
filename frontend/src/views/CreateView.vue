@@ -265,8 +265,8 @@ onMounted(async () => {
         </div>
         <div v-if="selectedWithMentions.length" class="selected-list">
           <div v-for="(asset, index) in selectedWithMentions" :key="asset.id" class="selected-row">
-            <AssetThumb :asset="asset" compact />
-            <div class="selected-copy"><strong>{{ asset.mention }}</strong><span>{{ asset.original_name }}</span><span>{{ formatAssetSize(asset) }}<template v-if="asset.kind === 'audio'"> / {{ formatAssetDuration(asset) }}</template></span></div>
+            <AssetThumb :asset="asset" compact video-preview />
+            <div class="selected-copy"><strong>{{ asset.mention }}</strong><span>{{ asset.original_name }}</span><span>{{ formatAssetSize(asset) }}<template v-if="asset.duration_seconds"> / {{ formatAssetDuration(asset) }}</template></span></div>
             <div class="row-actions">
               <AudioPreview v-if="asset.kind === 'audio'" :src="asset.content_url" compact />
               <button class="icon-button" type="button" aria-label="上移" :disabled="optimizing || index === 0" @click="moveAsset(index, -1)"><IconArrowUp :size="17" /></button>
@@ -286,9 +286,9 @@ onMounted(async () => {
         <div v-if="visibleAssets.length" class="asset-picker">
           <div v-for="asset in visibleAssets" :key="asset.id" class="asset-choice" :class="{ selected: selectedIds.has(asset.id) }">
             <button class="asset-choice-select" type="button" :disabled="optimizing" @click="toggleAsset(asset)">
-              <AssetThumb :asset="asset" />
+              <AssetThumb :asset="asset" video-preview />
               <span class="asset-choice-name">{{ asset.original_name }}</span>
-              <span class="asset-choice-size">{{ formatAssetSize(asset) }}<template v-if="asset.kind === 'audio'"> / {{ formatAssetDuration(asset) }}</template></span>
+              <span class="asset-choice-size">{{ formatAssetSize(asset) }}<template v-if="asset.duration_seconds"> / {{ formatAssetDuration(asset) }}</template></span>
               <span v-if="selectedIds.has(asset.id)" class="selected-check"><IconCheck :size="15" /></span>
             </button>
             <AudioPreview v-if="asset.kind === 'audio'" :src="asset.content_url" />
