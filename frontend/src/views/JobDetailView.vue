@@ -6,7 +6,6 @@ import { api, auth, formatAssetDuration, formatAssetSize, formatDate, formatDura
 import AssetThumb from "../components/AssetThumb.vue"
 import PromptText from "../components/PromptText.vue"
 import StatusBadge from "../components/StatusBadge.vue"
-import VideoPreview from "../components/VideoPreview.vue"
 
 const route = useRoute()
 const router = useRouter()
@@ -141,7 +140,7 @@ onBeforeUnmount(() => {
         <span v-if="job.progress_is_estimate" class="muted-text">进度为预计值</span>
       </section>
 
-      <VideoPreview v-if="job.status === 'succeeded' && job.download_url" :src="job.download_url" alt="生成视频" trigger-class="result-video" inline-controls />
+      <video v-if="job.status === 'succeeded' && job.download_url" class="result-video" :src="job.download_url" controls preload="metadata" />
       <p v-if="job.error" class="error-panel">{{ job.error }}</p>
 
       <div class="detail-grid">
